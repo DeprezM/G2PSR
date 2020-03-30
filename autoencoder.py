@@ -8,53 +8,66 @@ Created on Wed Mar 11 17:01:39 2020
 
 import torch as pt
 import numpy as np
-import random
+from matplotlib import pyplot as plt
 
 n=100
 d=50
 q=3
 nsr=0.05
 
-pt.manual_seed(0)
-X=np.empty([n,d], dtype=float)
-
 DEVICE = pt.device('cuda:' if pt.cuda.is_available() else 'cpu')
-
-for i in range(0,n):
-    for i2 in range(0,d):
-        X[i,i2]=random.randint(0,2)
-        
-X=pt.from_numpy(X)
         
 class autoencoder(pt.nn.Module):
     
     def __init__(self, input_shape, latentdim):
         super().__init__()
-        self.encoder=pt.nn.Linear(input_shape[1], latentdim)
-        self.decoder=pt.nn.Linear(latentdim, input_shape[1])
+        self.W_mu=pt.nn.Linear(input_shape[1], latentdim)
+        self.W_logvar=pt.nn.Linear(input_shape[1], latentdim)
+        self.W_mu_out=pt.nn.Linear(latentdim, input_shape[1])
+        self.W_logvar_out=pt.nn.Linear(latentdim, input_shape[1])
         self.criterion = pt.nn.MSELoss()
         self.optimizer = pt.optim.Adam(self.parameters())
     
     def encode(self, X):
-        Y=self.encoder(X)
-        return Y
-    
-    def decode(self, X):
-        Y=self.decoder(X)
-        return Y
+        Z=[]
+        for i, xi in enumerate(X):
+            q = pt.distributions.Normal(
+                loc=self.W_mu(xi),
+                scale=self.W_logvar(xi).exp().pow(0.5)
+			)
+            Z.append(q)
+            del q
+        return Z
+
+    def sample(self, Z):
+        if self.training:
+            return Z.rsample()
+        else:
+            return Z.loc
+
+    def decode(self, Z2):
+        X2 = pt.distributions.Normal(
+            loc=self.W_mu,
+            scale=self.W_logvar.exp().pow(0.5)
+		)
+        return X2
     
     def forward(self,X):
-        Y=self.encode(X)
-        X2=self.decode(Y)
-        return {"X": X, "Y": Y, "X'":X2}
+        Z=self.encode(X)
+        Z2=self.sample(Z)
+        X2=self.decode(Z2)
+        return {"X": X, "Z": Z, "X'":X2}
     
     def optimize(self,X, epochmax):
+        losslist=[]
         for epoch in range(0, epochmax):
             self.optimizer.zero_grad()
             pred=self.forward(X)['X']
             loss=self.criterion(X, pred)
             loss.backward()
+            losslist.append(loss.item())
             self.optimizer.step()
-            if(epoch==epochmax-1):
-                print(pred)
+        fig=plt.figure()
+        plt.plot(losslist, figure=fig)
         return self.state_dict()
+    
