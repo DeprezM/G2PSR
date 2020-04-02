@@ -9,15 +9,15 @@ Created on Mon Mar 30 16:44:54 2020
 import autoencoder as a
 import torch as pt
 
-samplesize=30
+samplesize=50
 noise=0.05
-q=3
+q=5
 d=2
 
-X=pt.rand(q,samplesize,requires_grad=True)
+X=pt.rand(samplesize,q,requires_grad=True)
 
-test=a.autoencoder(X.shape, a.q).to(a.DEVICE)
+test=a.autoencoder(X.shape, d).to(a.DEVICE)
 
 print(X)
 
-test.optimize(X, 1000)
+test.optimize(X, 4000)

@@ -10,11 +10,6 @@ import torch as pt
 import numpy as np
 from matplotlib import pyplot as plt
 
-n=100
-d=50
-q=3
-nsr=0.05
-
 DEVICE = pt.device('cuda:' if pt.cuda.is_available() else 'cpu')
         
 class autoencoder(pt.nn.Module):
@@ -25,19 +20,15 @@ class autoencoder(pt.nn.Module):
         self.W_logvar=pt.nn.Linear(input_shape[1], latentdim)
         self.W_mu_out=pt.nn.Linear(latentdim, input_shape[1])
         self.W_logvar_out=pt.nn.Linear(latentdim, input_shape[1])
-        self.criterion = pt.nn.MSELoss()
         self.optimizer = pt.optim.Adam(self.parameters())
-    
+
     def encode(self, X):
-        Z=[]
-        for i, xi in enumerate(X):
-            q = pt.distributions.Normal(
-                loc=self.W_mu(xi),
-                scale=self.W_logvar(xi).exp().pow(0.5)
-			)
-            Z.append(q)
-            del q
+        Z = pt.distributions.Normal(
+            loc=self.W_mu(X),
+            scale=self.W_logvar(X).exp().pow(0.5)
+		)
         return Z
+        
 
     def sample(self, Z):
         if self.training:
@@ -47,8 +38,8 @@ class autoencoder(pt.nn.Module):
 
     def decode(self, Z2):
         X2 = pt.distributions.Normal(
-            loc=self.W_mu,
-            scale=self.W_logvar.exp().pow(0.5)
+            loc=self.W_mu_out(Z2),
+            scale=self.W_logvar_out(Z2).exp().pow(0.5)
 		)
         return X2
     
@@ -58,16 +49,40 @@ class autoencoder(pt.nn.Module):
         X2=self.decode(Z2)
         return {"X": X, "Z": Z, "X'":X2}
     
+    def loss_function(fwd_return):
+        X = fwd_return['X']
+        Z = fwd_return['Z']
+        X2 = fwd_return["X'"]
+  
+        kl = 0
+        ll = 0
+  
+  			# KL Divergence
+        kl += pt.distributions.kl_divergence(Z, pt.distributions.Normal(0, 1)).sum(1).mean(0)  # torch.Size([1])
+        ll += X2.log_prob(X).sum(1).mean(0)
+  
+        total = kl - ll
+  
+        losses = {
+  			'total': total,
+  			'kl': kl,
+  			'll': ll
+  		}
+        
+        return losses
+
+    
     def optimize(self,X, epochmax):
         losslist=[]
         for epoch in range(0, epochmax):
             self.optimizer.zero_grad()
-            pred=self.forward(X)['X']
-            loss=self.criterion(X, pred)
+            pred=self.forward(X)
+            loss=autoencoder.loss_function(pred)['total']
             loss.backward()
             losslist.append(loss.item())
             self.optimizer.step()
         fig=plt.figure()
         plt.plot(losslist, figure=fig)
+        print(pred)
         return self.state_dict()
     
