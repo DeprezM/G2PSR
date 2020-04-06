@@ -11,12 +11,13 @@ import torch as pt
 
 samplesize=50
 noise=0.05
-q=5
-d=2
+q=10
+g=5
+p=2
 
 X=pt.rand(samplesize,q,requires_grad=True)
 
-test=a.autoencoder(X.shape, d).to(a.DEVICE)
+test=a.Autoencoder_multiplelayers(X.shape, g, p).to(a.DEVICE)
 
 print(X)
 
