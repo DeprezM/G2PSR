@@ -13,11 +13,10 @@ samplesize=50
 noise=0.05
 q=10
 g=5
-p=2
 
 X=pt.rand(samplesize,q,requires_grad=True)
 
-test=a.Autoencoder_multiplelayers(X.shape, g, p).to(a.DEVICE)
+test=a.VDAutoencoder(X.shape, g, 0.5).to(a.DEVICE)
 
 print(X)
 
