@@ -192,9 +192,9 @@ class VDAutoencoder(pt.nn.Module):
         self.W_mu_out=pt.nn.Linear(latentdim, inputdim)
         self.W_logvar_out=pt.nn.Linear(latentdim, inputdim)
         self.latentdim=latentdim
-        self.optimizer = pt.optim.Adam(self.parameters())
         self.alpha=pt.Tensor([0.5] * latentdim)
         self.alpha.requires_grad=True#alpha est tensor de pytorch de dimension latentdim (et doit se faire opti donc doit avoir gradient)
+        self.optimizer = pt.optim.Adam(self.parameters())
 
     def encode(self, X):
         Z = pt.distributions.Normal(
