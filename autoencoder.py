@@ -223,16 +223,19 @@ class VDAutoencoder(pt.nn.Module):
         X2=self.decode(Z2)
         return {"X": X, "Z": Z, "X'":X2}
     
-    def loss_function(self):
+    def loss_function(self, fwd_return):
         c1 = 1.16145124
         c2 = -1.50204118
         c3 = 0.58629921
+        X = fwd_return['X']
+        X2 = fwd_return["X'"]
   
         kl = 0
         ll = 0
   
   			# KL Divergence
         kl += 0.5 * self.alpha.log() + c1 * self.alpha + c2 * self.alpha**2 + c3 * self.alpha**3
+        ll += X2.log_prob(X).sum(1).mean(0)
   
         total = kl - ll
   
@@ -250,7 +253,7 @@ class VDAutoencoder(pt.nn.Module):
         for epoch in range(0, epochmax):
             self.optimizer.zero_grad()
             pred=self.forward(X)
-            loss=self.loss_function()['total'].mean()
+            loss=self.loss_function(pred)['total'].mean()
             loss.backward(retain_graph=True)
             losslist.append(loss.item())
             self.optimizer.step()
