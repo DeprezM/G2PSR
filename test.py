@@ -9,15 +9,19 @@ Created on Mon Mar 30 16:44:54 2020
 import autoencoder as a
 import torch as pt
 
-samplesize=50
+samplesize=10
 noise=0.05
 q=10
-g=5
+g=2
+z=5
 
-X=pt.rand(samplesize,q,requires_grad=True)
+X=pt.rand(samplesize,g,requires_grad=True)
+Y=pt.rand(g,q,requires_grad=True)
+Z=X@Y
 
-test=a.VDAutoencoder(X.shape, g, 0.5).to(a.DEVICE)
+test=a.VDAutoencoder(Z.shape, z).to(a.DEVICE)
 
 print(X)
+print(Z)
 
-test.optimize(X, 4000)
+test.optimize(Z, 4000)
