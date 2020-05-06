@@ -193,13 +193,14 @@ class VDAutoencoder(pt.nn.Module):
         self.W_logvar_out=pt.nn.Linear(latentdim, inputdim)
         self.latentdim=latentdim
         self.alpha=pt.Tensor([0.5] * latentdim)
-        self.alpha.requires_grad=True#alpha est tensor de pytorch de dimension latentdim (et doit se faire opti donc doit avoir gradient)
+        self.alpha.requires_grad=True
         self.optimizer = pt.optim.Adam(self.parameters())
+        self.optimizer.add_param_group({ "params":self.alpha})
 
     def encode(self, X):
         Z = pt.distributions.Normal(
             loc=self.W_mu(X),
-            scale=(self.alpha.log() + 2 * pt.log(pt.abs(self.W_mu(X)) + 1e-8)).exp().pow(0.5) #<- here change variance for wmu * alpha²
+            scale=(self.alpha.log() + 2 * pt.log(pt.abs(self.W_mu(X)) + 1e-8)).exp().pow(0.5)
 		)
         return Z
         
@@ -224,9 +225,9 @@ class VDAutoencoder(pt.nn.Module):
         return {"X": X, "Z": Z, "X'":X2}
     
     def loss_function(self, fwd_return):
-        c1 = 1.16145124
-        c2 = -1.50204118
-        c3 = 0.58629921
+        k1 = 0.63576
+        k2 = 1.87320
+        k3 = 1.48695
         X = fwd_return['X']
         X2 = fwd_return["X'"]
   
@@ -234,7 +235,7 @@ class VDAutoencoder(pt.nn.Module):
         ll = 0
   
   			# KL Divergence
-        kl += 0.5 * self.alpha.log() + c1 * self.alpha + c2 * self.alpha**2 + c3 * self.alpha**3
+        kl -= (k1 * pt.sigmoid(k2 + k3 * self.alpha.log()) - 0.5 * pt.log1p(self.alpha.pow(-1)) - k1).mean(0)
         ll += X2.log_prob(X).sum(1).mean(0)
   
         total = kl - ll
@@ -250,14 +251,24 @@ class VDAutoencoder(pt.nn.Module):
     
     def optimize(self,X, epochmax):
         losslist=[]
+        alpha1=[]
+        alpha2=[]
         for epoch in range(0, epochmax):
+            if (self.alpha[0] != self.alpha[0]):
+                print(losslist[len(losslist)-1])
+                break
             self.optimizer.zero_grad()
             pred=self.forward(X)
             loss=self.loss_function(pred)['total'].mean()
             loss.backward(retain_graph=True)
-            losslist.append(loss.item())
+            losslist.append(loss)
+            alpha1.append(self.alpha[0].item())
+            alpha2.append(self.alpha[1].item())
             self.optimizer.step()
         fig=plt.figure()
         plt.plot(losslist, figure=fig)
+        fig2=plt.figure()
+        plt.plot(alpha1, figure=fig2)
+        plt.plot(alpha2, figure=fig2)
         print(pred["Z"].rsample())
         return self.state_dict()
