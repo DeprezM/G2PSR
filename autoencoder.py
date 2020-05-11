@@ -200,7 +200,7 @@ class VDAutoencoder(pt.nn.Module):
     def encode(self, X):
         Z = pt.distributions.Normal(
             loc=self.W_mu(X),
-            scale=(self.alpha.log() + 2 * pt.log(pt.abs(self.W_mu(X)) + 1e-8)).exp().pow(0.5)
+            scale=(self.alpha + 2 * pt.log(self.W_mu(X)**2 + 1e-8)).exp().pow(0.5) #self.W_mu**2 + 1e-8 can be replaced by pt.abs(self.W_mu + 1e-8)
 		)
         return Z
         
@@ -235,7 +235,7 @@ class VDAutoencoder(pt.nn.Module):
         ll = 0
   
   			# KL Divergence
-        kl -= (k1 * pt.sigmoid(k2 + k3 * self.alpha.log()) - 0.5 * pt.log1p(self.alpha.pow(-1)) - k1).mean(0)
+        kl -= (k1 * pt.sigmoid(k2 + k3 * self.alpha) - 0.5 * pt.log1p(self.alpha.exp().pow(-1)) - k1).mean(0)
         ll += X2.log_prob(X).sum(1).mean(0)
   
         total = kl - ll
@@ -272,3 +272,62 @@ class VDAutoencoder(pt.nn.Module):
         plt.plot(alpha2, figure=fig2)
         print(pred["Z"].rsample())
         return self.state_dict()
+    
+class VDonWeightAE(pt.nn.Module):
+    
+    def __init__(self, input_shape):
+        super().__init__()
+        if type(input_shape) is pt.Tensor:
+            input_shape=input_shape.shape
+        if type(input_shape) is pt.Size or type(input_shape) is list:
+            samplesize=input_shape[0]
+            inputdim=input_shape[1]
+        else: return("error")
+        self.Weight=pt.nn.LayerNorm(input_shape)
+        self.alpha=pt.nn.Parameter(pt.Tensor([[0.5] * inputdim] * samplesize), requires_grad=True)
+        self.optimizer = pt.optim.Adam(self.parameters())
+        
+    def encode(self, X):
+        Y=pt.distributions.Normal(loc=self.Weight(X),
+                                  scale=(self.alpha + 2 * pt.log(self.Weight(X)**2 + 1e-8)).exp().pow(0.5))
+        return {"X":X, "W":self.Weight, "Y":Y}
+    
+    def loss_function(self, fwd_return):
+        k1 = 0.63576
+        k2 = 1.87320
+        k3 = 1.48695
+        X = fwd_return['X']
+        Y = fwd_return["Y"]
+  
+        kl = 0
+        ll = 0
+  
+  			# KL Divergence
+        kl -= (k1 * pt.sigmoid(k2 + k3 * self.alpha) - 0.5 * pt.log1p(self.alpha.exp().pow(-1)) - k1).mean(0).mean(0)
+        ll += Y.log_prob(X).sum(1).mean(0)
+  
+        total = kl - ll
+  
+        losses = {
+  			'total': total,
+  			'kl': kl,
+  			'll': ll
+  		}
+        
+        return losses
+    
+    def optimize(self,X, epochmax):
+        losslist=[]
+        for epoch in range(0, epochmax):
+            self.optimizer.zero_grad()
+            pred=self.encode(X)
+            loss=self.loss_function(pred)['total']
+            loss.backward(retain_graph=True)
+            if(epoch>100): #first few epoch have loss orders of magnitude higher, so it make the graph unreadable
+                losslist.append(loss)
+            self.optimizer.step()
+        fig=plt.figure()
+        plt.plot(losslist, figure=fig)
+        print(pred["Y"].rsample())
+        return self.state_dict()
+        
