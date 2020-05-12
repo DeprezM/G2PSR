@@ -11,9 +11,9 @@ import torch as pt
 import numpy as np
 
 #parameters
-samplesize=15
+samplesize=50
 q=10
-g=3
+g=5
 z=5
 
 #creating dummy data
@@ -31,6 +31,6 @@ Z=X@Y
 
 # test.optimize(Z, 4000)
 
-test=a.VDonWeightAE(Z).to(a.DEVICE)
+test=a.VDonWeightAE(X,Z).to(a.DEVICE)
 
-test.optimize(Z, 4000)
+test.optimize(X, Z, 10000)
