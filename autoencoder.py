@@ -282,7 +282,6 @@ class VDonWeightAE(pt.nn.Module):
         if type(output_shape) is pt.Tensor:
             output_shape=output_shape.shape
         if type(input_shape) is pt.Size or type(input_shape) is list:
-            samplesize=input_shape[0]
             inputdim=input_shape[1]
         else: return("error")
         if type(output_shape) is pt.Size or type(output_shape) is list:
@@ -290,8 +289,8 @@ class VDonWeightAE(pt.nn.Module):
         elif type(output_shape) is int:
             outputdim=output_shape
         else: return("error")
-        self.mu=pt.nn.Parameter(pt.Tensor([[mu0] * outputdim] * inputdim), requires_grad=True) #mu is a log to avoid getting nan
-        self.alpha=pt.nn.Parameter(pt.Tensor([[0.5] * outputdim] * inputdim), requires_grad=True) #alpha is a log to avoid getting nan
+        self.mu=pt.nn.Parameter(pt.Tensor([[mu0] * outputdim] * inputdim), requires_grad=True)
+        self.alpha=pt.nn.Parameter(pt.Tensor([[0.5]] * inputdim), requires_grad=True) #alpha is a log to avoid getting nan
         self.optimizer = pt.optim.Adam(self.parameters())
         
     def probalpha(self):
@@ -300,13 +299,21 @@ class VDonWeightAE(pt.nn.Module):
         return p
         
     def encode(self, X):
-        pW=pt.distributions.Normal(self.mu.exp(),(self.alpha + 2 * pt.log(self.mu.exp()**2 + 1e-8)).exp().pow(0.5))
+        alpha=self.alpha.exp()
+        for i in range(1,self.mu.shape[1]):
+            alpha=pt.cat((alpha, self.alpha.exp()), dim=1)
+        pW=pt.distributions.Normal(self.mu,(alpha + 2 * pt.log(self.mu**2 + 1e-8)).exp().pow(0.5))
         W=pW.rsample()
         Y=X@W
         return Y
     
     def loss_function(self, trueY, pred):
-        return ((pred - trueY)**2).pow(.5).mean()
+        k1 = 0.63576
+        k2 = 1.87320
+        k3 = 1.48695
+        kl = (k1 * pt.sigmoid(k2 + k3 * self.alpha) - 0.5 * pt.log1p(self.alpha.exp().pow(-1)) - k1).mean()
+        cost = ((pred - trueY)**2).pow(.5).mean()
+        return (cost-kl)
     
     def optimize(self,X, Y, epochmax):
         losslist=[]
