@@ -299,10 +299,7 @@ class VDonWeightAE(pt.nn.Module):
         return p
         
     def encode(self, X):
-        alpha=self.alpha.exp()
-        for i in range(1,self.mu.shape[1]):
-            alpha=pt.cat((alpha, self.alpha.exp()), dim=1)
-        pW=pt.distributions.Normal(self.mu,(alpha + 2 * pt.log(self.mu**2 + 1e-8)).exp().pow(0.5))
+        pW=pt.distributions.Normal(self.mu,(self.alpha + pt.log(self.mu**2 + 1e-8)).exp().pow(0.5))
         W=pW.rsample()
         Y=X@W
         return Y
@@ -312,7 +309,7 @@ class VDonWeightAE(pt.nn.Module):
         k2 = 1.87320
         k3 = 1.48695
         kl = (k1 * pt.sigmoid(k2 + k3 * self.alpha) - 0.5 * pt.log1p(self.alpha.exp().pow(-1)) - k1).mean()
-        cost = ((pred - trueY)**2).pow(.5).mean()
+        cost = ((pred - trueY)**2).mean()
         return (cost-kl)
     
     def optimize(self,X, Y, epochmax):

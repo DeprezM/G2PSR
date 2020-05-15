@@ -11,17 +11,17 @@ import torch as pt
 import numpy as np
 
 #parameters
-samplesize=50
-q=10
-g=5
+samplesize=500
+q=20
+g=10
 z=5
 
 #creating dummy data
-X=pt.randn(samplesize,g,requires_grad=True)
+X=pt.randn(samplesize,g)
 temp=np.random.rand(g,q)
 temp[2]=[0] * q
 temp=temp.astype(float)
-Y=pt.tensor(temp, requires_grad=True, dtype=pt.float)
+Y=pt.tensor(temp, dtype=pt.float)
 Z=X@Y
 
 # test=a.VDAutoencoder(Z.shape, z).to(a.DEVICE)
@@ -33,4 +33,4 @@ Z=X@Y
 
 test=a.VDonWeightAE(X,Z).to(a.DEVICE)
 
-test.optimize(X, Z, 10000)
+test.optimize(X, Z, 4000)
