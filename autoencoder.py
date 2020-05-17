@@ -273,7 +273,7 @@ class VDAutoencoder(pt.nn.Module):
         print(pred["Z"].rsample())
         return self.state_dict()
     
-class VDonWeightAE(pt.nn.Module):
+class VDonWeightAE(pt.nn.Module): #seems extremely robust to noise when it comes to determining relevant dimensions
     
     def __init__(self, input_shape, output_shape, mu0=0.5, alpha0=0.5):
         super().__init__()
