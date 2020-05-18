@@ -326,3 +326,27 @@ class VDonWeightAE(pt.nn.Module): #seems extremely robust to noise when it comes
         print(pred)
         return self.state_dict()
         
+    
+class SNPAutoencoder(pt.nn.Module):
+    
+    def __init__(self, input_list, mu0=0.5, alpha0=0.5):
+        super().__init__()
+        
+        #getting the dimension
+        listdim=[]
+        if type(input_list) is list:
+            for i in range(0,len(input_list)-1):
+                if type(input_list[i]) is not pt.Tensor:
+                    return("error")
+                listdim[i]=len(input_list[i])
+        else: return("error")
+        
+        #creating the parameters
+        list_mu=[]
+        list_alpha=[]
+        for i in range(0, len(listdim)-1):
+            list_mu[i]=pt.nn.Parameter(pt.Tensor([mu0] * listdim[i]), requires_grad=True)
+            list_alpha[i]=pt.nn.Parameter(pt.Tensor([alpha0] * listdim[i]), requires_grad=True)
+        self.list_mu=list_mu
+        self.list_alpha=list_alpha
+        self.optimizer = pt.optim.Adam(self.parameters())

@@ -15,7 +15,7 @@ samplesize=500
 q=20
 g=10
 z=5
-noise=10
+noise=5
 
 #creating dummy data
 X=pt.randn(samplesize,g)
@@ -30,13 +30,5 @@ noise=pt.normal(mean=pt.Tensor([[0] * q] * samplesize),
                 std=pt.Tensor([[noise] * q] * samplesize))
 Z=Z+noise
 
-# test=a.VDAutoencoder(Z.shape, z).to(a.DEVICE)
-
-# print(X)
-# print(Z)
-
-# test.optimize(Z, 4000)
-
 test=a.VDonWeightAE(X,Z).to(a.DEVICE)
-
 test.optimize(X, Z, 5000)
