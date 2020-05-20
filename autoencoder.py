@@ -335,18 +335,24 @@ class SNPAutoencoder(pt.nn.Module):
         #getting the dimension
         listdim=[]
         if type(input_list) is list:
-            for i in range(0,len(input_list)-1):
+            for i in range(0,len(input_list)):
                 if type(input_list[i]) is not pt.Tensor:
                     return("error")
-                listdim[i]=len(input_list[i])
+                listdim.append(len(input_list[i]))
         else: return("error")
         
         #creating the parameters
         list_mu=[]
         list_alpha=[]
-        for i in range(0, len(listdim)-1):
-            list_mu[i]=pt.nn.Parameter(pt.Tensor([mu0] * listdim[i]), requires_grad=True)
-            list_alpha[i]=pt.nn.Parameter(pt.Tensor([alpha0] * listdim[i]), requires_grad=True)
+        for i in range(0, len(listdim)):
+            list_mu.append(pt.nn.Parameter(pt.Tensor([mu0] * listdim[i]), requires_grad=True))
+            list_alpha.append(pt.nn.Parameter(pt.Tensor([alpha0] * listdim[i]), requires_grad=True))
         self.list_mu=list_mu
         self.list_alpha=list_alpha
-        self.optimizer = pt.optim.Adam(self.parameters())
+        self.optimizer = pt.optim.Adam([mu for mu in self.list_mu] + [alpha for alpha in self.list_alpha])
+        
+    def genSNPstrand(length):
+        SNP=np.floor(abs(np.random.randn(length)))
+        for i in range(0,len(SNP)-1):
+            if SNP[i]>2: SNP[i]=2
+        return pt.Tensor(SNP)
