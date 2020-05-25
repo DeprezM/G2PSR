@@ -26,14 +26,24 @@ def test1():
     temp[7]=[0] * q
     temp=temp.astype(float)
     Y=pt.tensor(temp, dtype=pt.float)
-    Z=X@Y
+    Ztrue=X@Y
     noise=pt.normal(mean=pt.Tensor([[0] * q] * samplesize), 
                     std=pt.Tensor([[noise] * q] * samplesize))
-    Z=Z+noise
+    Z=Ztrue+noise
+    
+    print(Ztrue)
+    print(Z)
+    print(pt.mul(Z-Ztrue, 1/Z))
     
     test=a.VDonWeightAE(X,Z).to(a.DEVICE)
     test.optimize(X, Z, 5000)
     
-test=[snp.genSNPstrand(10),snp.genSNPstrand(50),snp.genSNPstrand(13),snp.genSNPstrand(5)]
+    return test
+    
+test=snp.genfullprofile(10, 1, 8)
+X=test["X"]
+Y=test["Y"]
 
-test2=snp(test)
+test2=snp(X, Y).to(a.DEVICE)
+
+test2.optimize(X, Y, 10000)
