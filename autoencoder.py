@@ -328,8 +328,8 @@ class VDonWeightAE(pt.nn.Module): #seems extremely robust to noise when it comes
         
     
 class SNPAutoencoder(pt.nn.Module):
-    strand_max=20
-    strand_min=10
+    strand_max=10
+    strand_min=3
     
     def __init__(self, input_list, output_shape, mu0=1, alpha0=0):
         super().__init__()
@@ -338,14 +338,15 @@ class SNPAutoencoder(pt.nn.Module):
         listdim=[]
         if type(input_list) is list:
             for i in range(0,len(input_list)):
-                if type(input_list[i]) is not pt.Tensor:
-                    return("error")
-                listdim.append(len(input_list[i]))
+                if type(input_list[i]) is pt.Tensor:
+                    input_shape=input_list[i].shape
+                    listdim.append(input_shape[1])
+                else: return("error")
         else: return("error")
         if type(output_shape) is pt.Tensor:
             output_shape=output_shape.shape
         if type(output_shape) is pt.Size or type(output_shape) is list:
-            outputdim=output_shape[0]
+            outputdim=output_shape[1]
         elif type(output_shape) is int:
             outputdim=output_shape
         else: return("error")
@@ -360,7 +361,7 @@ class SNPAutoencoder(pt.nn.Module):
         self.list_W_logvar=list_W_logvar
         self.alpha=pt.nn.Parameter(pt.Tensor([[alpha0]] * len(listdim)), requires_grad=True) #alpha is a log
         self.mu=pt.nn.Parameter(pt.Tensor([[mu0] * outputdim] * len(listdim)), requires_grad=True)
-        self.optimizer = pt.optim.Adam(self.parameters())
+        self.optimizer = pt.optim.Adam(self.parameters(), amsgrad=True)
         paramlist=[[params for params in mu.parameters()] for mu in self.list_W_mu] + [[params for params in alpha.parameters()] for alpha in self.list_W_logvar]
         for param in paramlist:
             self.optimizer.add_param_group({"params": param})
@@ -378,8 +379,8 @@ class SNPAutoencoder(pt.nn.Module):
         gensample=[]
         for g in genarray:
             gensample.append(g.rsample())
-        gensample=pt.Tensor(gensample)
-        pW=pt.distributions.Normal(self.mu,(self.alpha.exp() + pt.log(self.mu**2 + 1e-8)).exp().pow(0.5))
+        gensample=pt.cat(gensample,1)
+        pW=pt.distributions.Normal(self.mu,(self.alpha + pt.log(self.mu**2 + 1e-8)).exp().pow(0.5))
         W=pW.rsample()
         Y=gensample@W
         return {"X":X, "gene": genarray, "Z":gensample, "Y": Y}
@@ -402,7 +403,7 @@ class SNPAutoencoder(pt.nn.Module):
         for epoch in range(0, epochmax):
             self.optimizer.zero_grad()
             pred=self.forward(X)
-            loss=self.loss_function(Y, pred["Y"])
+            loss=self.loss_function(pred["Y"], Y)
             loss.backward(retain_graph=True)
             losslist.append(loss)
             self.optimizer.step()
@@ -411,35 +412,35 @@ class SNPAutoencoder(pt.nn.Module):
         print(pred)
         return self.state_dict()
         
-    def genSNPstrand(length):
-        SNP=np.floor(abs(np.random.randn(length)))
-        for i in range(0,len(SNP)-1):
-            if SNP[i]>2: SNP[i]=2
+    def genSNPstrand(samplesize, nb_SNP):
+        SNP=np.floor(abs(np.random.randn(samplesize, nb_SNP)))
+        for sample in SNP:
+            for snp in sample:
+                if snp>2: snp=2
         return pt.Tensor(SNP)
     
     @classmethod
-    def genSNPprofile(cls,length):
+    def genSNPprofile(cls,samplesize, nb_gene):
         ret=[]
-        for i in range(0,length):
-            strand=np.random.randint(cls.strand_min,cls.strand_max)
-            ret.append(cls.genSNPstrand(strand))
+        for i in range(0,nb_gene):
+            nb_SNP=np.random.randint(cls.strand_min,cls.strand_max)
+            ret.append(cls.genSNPstrand(samplesize, nb_SNP))
         return ret
     
     @classmethod
-    def genfullprofile(cls, nb_gene, nb_trait, nb_W2dim):
-        X=cls.genSNPprofile(nb_gene)
+    def genfullprofile(cls, samplesize, nb_gene, nb_trait, nb_W2dim):
+        X=cls.genSNPprofile(samplesize, nb_gene)
         W1=[]
         Z=[]
-        for i in range(0,len(X)):
-            Wi=np.random.randn(len(X[i]))
+        for i in range(0, nb_gene):
+            Wi=abs(np.random.randn(X[i].shape[1]))
             Wi=pt.Tensor(Wi)
             W1.append(Wi)
             Z.append(X[i] @ Wi)
-        Z=pt.Tensor(Z)
+        Z=pt.stack(Z).transpose(0,1) #Xi * Wi is a vector of shape (1,samplesize) rather than (samplesize,1) so when using pt.stack we have a shape (nbgene, samplesize) so we transpose
         
         W2=pt.zeros(nb_gene, nb_trait)
         for i in range(0,nb_W2dim):
-            for i2 in range(0,nb_trait):
-                W2[i][i2]=1
-        Y=Z@W2
+                W2[i]=np.random.randn()+1
+        Y=Z @ W2
         return ({"X":X, "W1":W1, "Z":Z, "W2":W2, "Y":Y})

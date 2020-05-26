@@ -40,7 +40,7 @@ def test1():
     
     return test
     
-test=snp.genfullprofile(10, 1, 8)
+test=snp.genfullprofile(200,10, 1, 3)
 X=test["X"]
 Y=test["Y"]
 
