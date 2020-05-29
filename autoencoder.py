@@ -200,7 +200,7 @@ class VDAutoencoder(pt.nn.Module):
     def encode(self, X):
         Z = pt.distributions.Normal(
             loc=self.W_mu(X),
-            scale=(self.alpha + 2 * pt.log(self.W_mu(X)**2 + 1e-8)).exp().pow(0.5) #self.W_mu**2 + 1e-8 can be replaced by pt.abs(self.W_mu + 1e-8)
+            scale=(self.alpha + pt.log(self.W_mu(X)**2 + 1e-8)).exp().pow(0.5) #self.W_mu**2 + 1e-8 can be replaced by pt.abs(self.W_mu + 1e-8)
 		)
         return Z
         
@@ -380,18 +380,31 @@ class SNPAutoencoder(pt.nn.Module):
         for g in genarray:
             gensample.append(g.rsample())
         gensample=pt.cat(gensample,1)
-        pW=pt.distributions.Normal(self.mu,(self.alpha + pt.log(self.mu**2 + 1e-8)).exp().pow(0.5))
-        W=pW.rsample()
-        Y=gensample@W
+        
+        #not sure about new version
+        # pW=pt.distributions.Normal(self.mu,(self.alpha + pt.log(self.mu**2 + 1e-8)).exp().pow(0.5))
+        # W=pW.rsample()
+        # Y=gensample@W
+        
+        #need Y as a normal distribution for loglikelyhood
+        Y=pt.distributions.Normal(
+            loc = gensample @ self.mu,
+            scale = abs(gensample) @ (self.alpha + pt.log(self.mu**2 + 1e-8)).exp().pow(0.5)
+            )
+        
         return {"X":X, "gene": genarray, "Z":gensample, "Y": Y}
     
     def loss_function(self, pred, trueY):
         k1 = 0.63576
         k2 = 1.87320
         k3 = 1.48695
-        kl = (k1 * pt.sigmoid(k2 + k3 * self.alpha) - 0.5 * pt.log1p(self.alpha.exp().pow(-1)) - k1).mean()
-        cost = ((pred - trueY)**2).mean()
-        return (cost-kl)
+        
+        kl=0
+        ll=0
+        
+        kl -= (k1 * pt.sigmoid(k2 + k3 * self.alpha) - 0.5 * pt.log1p(self.alpha.exp().pow(-1)) - k1).mean()
+        ll += pred.log_prob(trueY).sum(1).mean(0)
+        return (kl - ll)
     
     def probalpha(self):
         alpha=self.alpha.exp()
@@ -401,6 +414,8 @@ class SNPAutoencoder(pt.nn.Module):
     def optimize(self, X, Y, epochmax):
         losslist=[]
         for epoch in range(0, epochmax):
+            if (epoch * 100 % epochmax==0):
+                print(str(epoch * 100 / epochmax) + "%...")
             self.optimizer.zero_grad()
             pred=self.forward(X)
             loss=self.loss_function(pred["Y"], Y)
@@ -409,7 +424,9 @@ class SNPAutoencoder(pt.nn.Module):
             self.optimizer.step()
         fig=plt.figure()
         plt.plot(losslist, figure=fig)
-        print(pred)
+        print((pred["Y"].rsample()-Y).mean())
+        print("probability that the gene is not relevant: ")
+        print(self.probalpha())
         return self.state_dict()
         
     def genSNPstrand(samplesize, nb_SNP):
@@ -444,3 +461,19 @@ class SNPAutoencoder(pt.nn.Module):
                 W2[i]=np.random.randn()+1
         Y=Z @ W2
         return ({"X":X, "W1":W1, "Z":Z, "W2":W2, "Y":Y})
+    
+#     volumes = pd.read_csv('
+# https://marcolorenzi.github.io/material/winter_school/volumes.csv
+# ')
+# volumes_value = np.array(volumes.iloc[:,2:]).reshape([len(volumes.RID),5])
+
+# for i in range(volumes_value.shape[1]):
+#     volumes_value[:,i] = (volumes_value[:,i] - np.mean(volumes_value[:,i]))/np.std(volumes_value[:,i])
+
+# cognition = pd.read_csv('
+# https://marcolorenzi.github.io/material/winter_school/cognition.csv
+# ')
+# cognition_value = np.array(cognition.iloc[:,2:]).reshape([len(cognition.RID),7])
+
+# for i in range(cognition_value.shape[1]):
+#     cognition_value[:,i] = (cognition_value[:,i] - np.mean(cognition_value[:,i]))/np.std(cognition_value[:,i])

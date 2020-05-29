@@ -40,10 +40,12 @@ def test1():
     
     return test
     
-test=snp.genfullprofile(200,10, 1, 3)
+test=snp.genfullprofile(2000,10, 1, 2)
 X=test["X"]
 Y=test["Y"]
 
 test2=snp(X, Y).to(a.DEVICE)
-
-test2.optimize(X, Y, 10000)
+stat=test["W2"] * test["Z"].transpose(0,1)
+test2.optimize(X, Y, 3000)
+print(test["W2"])
+print(stat.mean(1))
