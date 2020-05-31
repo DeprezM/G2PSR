@@ -9,6 +9,7 @@ Created on Wed Mar 11 17:01:39 2020
 import torch as pt
 import numpy as np
 from matplotlib import pyplot as plt
+import pandas as pd
 
 DEVICE = pt.device('cuda:' if pt.cuda.is_available() else 'cpu')
         
@@ -331,6 +332,9 @@ class SNPAutoencoder(pt.nn.Module):
     strand_max=10
     strand_min=3
     
+    _defaultVL = "https://marcolorenzi.github.io/material/winter_school/volumes.csv"
+    _defaultCL = "https://marcolorenzi.github.io/material/winter_school/cognition.csv"
+    
     def __init__(self, input_list, output_shape, mu0=1, alpha0=0):
         super().__init__()
         
@@ -411,8 +415,9 @@ class SNPAutoencoder(pt.nn.Module):
         p=pt.mul(alpha, 1/(alpha+1))
         return p
     
-    def optimize(self, X, Y, epochmax):
+    def optimize(self, X, Y, epochmax, step=100):
         losslist=[]
+        plist=[]
         for epoch in range(0, epochmax):
             if (epoch * 100 % epochmax==0):
                 print(str(epoch * 100 / epochmax) + "%...")
@@ -420,10 +425,25 @@ class SNPAutoencoder(pt.nn.Module):
             pred=self.forward(X)
             loss=self.loss_function(pred["Y"], Y)
             loss.backward(retain_graph=True)
-            losslist.append(loss)
+            if (epoch % step == 0):
+                losslist.append(loss)
+                p=self.probalpha().detach().numpy()
+                plist.append(p)
             self.optimizer.step()
+            
+        losslist.append(loss)
+        p=self.probalpha().detach().numpy()
+        plist.append(p)
+        indexlist=list(range(0,epochmax,step))
+        indexlist.append(epochmax)
         fig=plt.figure()
-        plt.plot(losslist, figure=fig)
+        plt.plot(indexlist,losslist, figure=fig)
+        fig2=plt.figure()
+        plist=np.reshape(plist, (len(plist), len(plist[0])))
+        plt.plot(indexlist,plist)
+        plt.legend()
+        plt.ylim(0,1)
+        
         print((pred["Y"].rsample()-Y).mean())
         print("probability that the gene is not relevant: ")
         print(self.probalpha())
@@ -462,18 +482,15 @@ class SNPAutoencoder(pt.nn.Module):
         Y=Z @ W2
         return ({"X":X, "W1":W1, "Z":Z, "W2":W2, "Y":Y})
     
-#     volumes = pd.read_csv('
-# https://marcolorenzi.github.io/material/winter_school/volumes.csv
-# ')
-# volumes_value = np.array(volumes.iloc[:,2:]).reshape([len(volumes.RID),5])
+    def loadVolumetricData(linkVolume = _defaultVL, linkCognition = _defaultCL):
+        volumes = pd.read_csv(linkVolume)
+        volumes_value = np.array(volumes.iloc[:,2:]).reshape([len(volumes.RID),5])
 
-# for i in range(volumes_value.shape[1]):
-#     volumes_value[:,i] = (volumes_value[:,i] - np.mean(volumes_value[:,i]))/np.std(volumes_value[:,i])
+        for i in range(volumes_value.shape[1]):
+            volumes_value[:,i] = (volumes_value[:,i] - np.mean(volumes_value[:,i]))/np.std(volumes_value[:,i])
 
-# cognition = pd.read_csv('
-# https://marcolorenzi.github.io/material/winter_school/cognition.csv
-# ')
-# cognition_value = np.array(cognition.iloc[:,2:]).reshape([len(cognition.RID),7])
+        cognition = pd.read_csv(linkCognition)
+        cognition_value = np.array(cognition.iloc[:,2:]).reshape([len(cognition.RID),7])
 
-# for i in range(cognition_value.shape[1]):
-#     cognition_value[:,i] = (cognition_value[:,i] - np.mean(cognition_value[:,i]))/np.std(cognition_value[:,i])
+        for i in range(cognition_value.shape[1]):
+            cognition_value[:,i] = (cognition_value[:,i] - np.mean(cognition_value[:,i]))/np.std(cognition_value[:,i])
