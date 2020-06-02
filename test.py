@@ -40,12 +40,20 @@ def test1():
     
     return test
     
-test=snp.genfullprofile(2000,10, 3, 7)
-X=test["X"]
-Y=test["Y"]
+def test2():
+    test=snp.genfullprofile(2000,10, 3, 7)
+    X=test["X"]
+    Y=test["Y"]
+    
+    test2=snp(X, Y).to(a.DEVICE)
+    #stat=test["W2"] * test["Z"].transpose(0,1)
+    test2.optimize(X, Y, 10000)
+    print(test["W2"])
+    #print(stat.mean(1))
+    
+data=snp.loadData()
+X=data["Tensor X"]
+Y=data["Tensor Y"]
 
-test2=snp(X, Y).to(a.DEVICE)
-#stat=test["W2"] * test["Z"].transpose(0,1)
-test2.optimize(X, Y, 10000)
-print(test["W2"])
-#print(stat.mean(1))
+AutoEncoder=snp(X,Y).to(a.DEVICE)
+AutoEncoder.optimize(X, Y, 100000)

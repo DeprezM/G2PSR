@@ -334,6 +334,8 @@ class SNPAutoencoder(pt.nn.Module):
     
     _defaultVL = "https://marcolorenzi.github.io/material/winter_school/volumes.csv"
     _defaultCL = "https://marcolorenzi.github.io/material/winter_school/cognition.csv"
+    _defaultGL = "Genotype_matrix_example1.csv"
+    _defaultmap = "matrix_snp_gene_example_1.csv"
     
     def __init__(self, input_list, output_shape, mu0=1, alpha0=0):
         super().__init__()
@@ -482,15 +484,57 @@ class SNPAutoencoder(pt.nn.Module):
         Y=Z @ W2
         return ({"X":X, "W1":W1, "Z":Z, "W2":W2, "Y":Y})
     
+    def loadGeneticData(linkGenotype = _defaultGL, linkSNPmap= _defaultmap):
+        gencsv = pd.read_csv(linkGenotype, header=0, index_col=0)
+        genmap = pd.read_csv(linkSNPmap, header=0, index_col=0)
+        gencsv=gencsv.transpose()
+        return {"genotype":gencsv, "SNP into genes":genmap}
+    
     def loadVolumetricData(linkVolume = _defaultVL, linkCognition = _defaultCL):
-        volumes = pd.read_csv(linkVolume)
-        volumes_value = np.array(volumes.iloc[:,2:]).reshape([len(volumes.RID),5])
+        
+        #I don't know what the first column of the csv file is
+        
+        volumes = pd.read_csv(linkVolume, header=0, index_col=1).drop("Unnamed: 0", axis=1)
+        # volumes_value = np.array(volumes.iloc[:,2:]).reshape([len(volumes.RID),5])
 
-        for i in range(volumes_value.shape[1]):
-            volumes_value[:,i] = (volumes_value[:,i] - np.mean(volumes_value[:,i]))/np.std(volumes_value[:,i])
+        # for i in range(volumes_value.shape[1]):
+        #     volumes_value[:,i] = (volumes_value[:,i] - np.mean(volumes_value[:,i]))/np.std(volumes_value[:,i])
 
-        cognition = pd.read_csv(linkCognition)
-        cognition_value = np.array(cognition.iloc[:,2:]).reshape([len(cognition.RID),7])
+        cognition = pd.read_csv(linkCognition, header=0, index_col=1).drop("Unnamed: 0", axis=1)
+        # cognition_value = np.array(cognition.iloc[:,2:]).reshape([len(cognition.RID),7])
 
-        for i in range(cognition_value.shape[1]):
-            cognition_value[:,i] = (cognition_value[:,i] - np.mean(cognition_value[:,i]))/np.std(cognition_value[:,i])
+        # for i in range(cognition_value.shape[1]):
+        #     cognition_value[:,i] = (cognition_value[:,i] - np.mean(cognition_value[:,i]))/np.std(cognition_value[:,i])
+            
+        return {"Volume":volumes, "cognition":cognition}
+    
+    @classmethod
+    def loadData(cls, linkGenotype = _defaultGL, linkSNPmap= _defaultmap, linkVolume = _defaultVL, linkCognition = _defaultCL):
+        #loading the data
+        temp=cls.loadGeneticData(linkGenotype, linkSNPmap)
+        genotype=temp["genotype"]
+        genmap=temp["SNP into genes"]
+        temp=cls.loadVolumetricData(linkVolume, linkCognition)
+        volumetric_data=temp["Volume"]
+        cognition_data=temp["cognition"]
+        
+        #we put the data in a better form
+        genotype.rename(index = lambda s: int(s[-4:]), inplace=True) #I don't know what the first part of the name is
+        #We take the last 4 digits and cast them as int to get the RID in the same type as for the other dataframe
+        physio_data=pd.concat([volumetric_data,cognition_data], axis=1, join="inner")
+        data=pd.concat([genotype,physio_data], axis=1, join="inner")
+        Y=data.iloc[:,-12:] #TODO: try to get the number of columns from the csv table
+        tensorY=pt.Tensor(Y.values)
+        X=data.iloc[:,:-12]
+        Xlist={}
+        for gene in genmap.columns:
+            Xi=pd.DataFrame()
+            for snp in X.columns:
+                if(genmap[gene][snp]==1):
+                        Xi=pd.concat([Xi,X[snp]], axis=1)
+            Xlist[gene]=Xi
+        
+        tensorX=[]
+        for gene in Xlist:
+            tensorX.append(pt.Tensor(Xlist[gene].values))
+        return {"X":Xlist, "Tensor X":tensorX, "Y":Y, "Tensor Y":tensorY}
