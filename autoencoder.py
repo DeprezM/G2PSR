@@ -336,20 +336,26 @@ class SNPAutoencoder(pt.nn.Module):
     _defaultCL = "https://marcolorenzi.github.io/material/winter_school/cognition.csv"
     _defaultGL = "Genotype_matrix_example1.csv"
     _defaultmap = "matrix_snp_gene_example_1.csv"
+    _pmin= 0.05 #the value of p under which we keep the gene for analysis of its SNP
     
     def __init__(self, input_list, output_shape, mu0=1, alpha0=0):
         super().__init__()
         
         #getting the dimension
         listdim=[]
+        self.X=None
+        self.Y=None
         if type(input_list) is list:
             for i in range(0,len(input_list)):
                 if type(input_list[i]) is pt.Tensor:
+                    if (self.X is None): self.X=[]
                     input_shape=input_list[i].shape
                     listdim.append(input_shape[1])
+                    self.X.append(input_list[i])
                 else: return("error")
         else: return("error")
         if type(output_shape) is pt.Tensor:
+            self.Y=output_shape
             output_shape=output_shape.shape
         if type(output_shape) is pt.Size or type(output_shape) is list:
             outputdim=output_shape[1]
@@ -371,6 +377,17 @@ class SNPAutoencoder(pt.nn.Module):
         paramlist=[[params for params in mu.parameters()] for mu in self.list_W_mu] + [[params for params in alpha.parameters()] for alpha in self.list_W_logvar]
         for param in paramlist:
             self.optimizer.add_param_group({"params": param})
+            
+    @classmethod
+    def CSVtoAutoEncoder(cls, linkGenotype=_defaultGL, linkSNPmap=_defaultmap, linkVolume=_defaultVL, linkCognition=_defaultCL):
+        data=cls.loadData(linkGenotype,linkSNPmap, linkVolume, linkCognition)
+        autoencoder=cls(data["Tensor X"], data["Tensor Y"]).to(DEVICE)
+        autoencoder.dfX=[]
+        autoencoder.dfY=[]
+        i=0
+        for gene in data["X"].keys():
+            autoencoder.dfX.append([gene, data["X"][gene], autoencoder.probalpha()[i]])
+        return autoencoder
             
     def forward(self,X):
         #encoding into genes
@@ -417,7 +434,9 @@ class SNPAutoencoder(pt.nn.Module):
         p=pt.mul(alpha, 1/(alpha+1))
         return p
     
-    def optimize(self, X, Y, epochmax, step=100):
+    def optimize(self, X = None, Y = None, epochmax = 10000, step=100):
+        if X is None: X=self.X
+        if Y is None: Y=self.Y
         losslist=[]
         plist=[]
         for epoch in range(0, epochmax):
@@ -446,10 +465,24 @@ class SNPAutoencoder(pt.nn.Module):
         plt.legend()
         plt.ylim(0,1)
         
-        print((pred["Y"].rsample()-Y).mean())
+        self.summary()
+    
+    def summary(self, **kwargs):
+        if self.X is not None or len(self.X)!=0:
+            print((self.forward(self.X)["Y"].rsample()-self.Y).mean())
         print("probability that the gene is not relevant: ")
-        print(self.probalpha())
-        return self.state_dict()
+        prob=self.probalpha()
+        i=0
+        relevantgene=[]
+        for i in range(0,len(self.dfX)):
+            string=self.dfX[i][0] + ": " + "{:.4f}".format(prob[i].item())
+            if (prob[i].item()<SNPAutoencoder._pmin): 
+                relevantgene.append(i)
+            print(string)
+            i+=1
+        print("Gene(s) considered relevant:")
+        for gene in relevantgene:
+            print(self.dfX[gene][0])
         
     def genSNPstrand(samplesize, nb_SNP):
         SNP=np.floor(abs(np.random.randn(samplesize, nb_SNP)))
@@ -491,21 +524,8 @@ class SNPAutoencoder(pt.nn.Module):
         return {"genotype":gencsv, "SNP into genes":genmap}
     
     def loadVolumetricData(linkVolume = _defaultVL, linkCognition = _defaultCL):
-        
-        #I don't know what the first column of the csv file is
-        
         volumes = pd.read_csv(linkVolume, header=0, index_col=1).drop("Unnamed: 0", axis=1)
-        # volumes_value = np.array(volumes.iloc[:,2:]).reshape([len(volumes.RID),5])
-
-        # for i in range(volumes_value.shape[1]):
-        #     volumes_value[:,i] = (volumes_value[:,i] - np.mean(volumes_value[:,i]))/np.std(volumes_value[:,i])
-
         cognition = pd.read_csv(linkCognition, header=0, index_col=1).drop("Unnamed: 0", axis=1)
-        # cognition_value = np.array(cognition.iloc[:,2:]).reshape([len(cognition.RID),7])
-
-        # for i in range(cognition_value.shape[1]):
-        #     cognition_value[:,i] = (cognition_value[:,i] - np.mean(cognition_value[:,i]))/np.std(cognition_value[:,i])
-            
         return {"Volume":volumes, "cognition":cognition}
     
     @classmethod
@@ -517,15 +537,16 @@ class SNPAutoencoder(pt.nn.Module):
         temp=cls.loadVolumetricData(linkVolume, linkCognition)
         volumetric_data=temp["Volume"]
         cognition_data=temp["cognition"]
+        physio_dim=-volumetric_data.shape[1]-cognition_data.shape[1]
         
         #we put the data in a better form
         genotype.rename(index = lambda s: int(s[-4:]), inplace=True) #I don't know what the first part of the name is
         #We take the last 4 digits and cast them as int to get the RID in the same type as for the other dataframe
         physio_data=pd.concat([volumetric_data,cognition_data], axis=1, join="inner")
         data=pd.concat([genotype,physio_data], axis=1, join="inner")
-        Y=data.iloc[:,-12:] #TODO: try to get the number of columns from the csv table
-        tensorY=pt.Tensor(Y.values)
-        X=data.iloc[:,:-12]
+        Y=data.iloc[:,physio_dim:]
+        tensorY=pt.tensor(Y.values)
+        X=data.iloc[:,:physio_dim]
         Xlist={}
         for gene in genmap.columns:
             Xi=pd.DataFrame()

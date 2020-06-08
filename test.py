@@ -51,9 +51,6 @@ def test2():
     print(test["W2"])
     #print(stat.mean(1))
     
-data=snp.loadData()
-X=data["Tensor X"]
-Y=data["Tensor Y"]
 
-AutoEncoder=snp(X,Y).to(a.DEVICE)
-AutoEncoder.optimize(X, Y, 100000)
+AutoEncoder=snp.CSVtoAutoEncoder()
+AutoEncoder.optimize(epochmax=100000, step=100)
