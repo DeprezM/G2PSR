@@ -53,4 +53,4 @@ def test2():
     
 
 AutoEncoder=snp.CSVtoAutoEncoder()
-AutoEncoder.optimize(epochmax=100000, step=100)
+AutoEncoder.optimize(epochmax=1000000, step=100)
