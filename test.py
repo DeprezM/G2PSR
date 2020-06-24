@@ -41,16 +41,17 @@ def test1():
     return test
     
 def test2():
-    test=snp.genfullprofile(2000,10, 3, 7)
+    test=snp.genfullprofile(500, 4, 10, 1)
     X=test["X"]
     Y=test["Y"]
     
     test2=snp(X, Y).to(a.DEVICE)
     #stat=test["W2"] * test["Z"].transpose(0,1)
-    test2.optimize(X, Y, 10000)
+    test2.optimize(X, Y, 100000)
     print(test["W2"])
     #print(stat.mean(1))
+    return test2
     
-
+pt.cuda.empty_cache()
 AutoEncoder=snp.CSVtoAutoEncoder()
-AutoEncoder.optimize(epochmax=1000000, step=100)
+AutoEncoder.optimize(epochmax=50000, step=100)

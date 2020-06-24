@@ -11,7 +11,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import pandas as pd
 
-DEVICE = pt.device('cuda:' if pt.cuda.is_available() else 'cpu')
+DEVICE = pt.device('cuda' if pt.cuda.is_available() else 'cpu')
         
 class Autoencoder(pt.nn.Module):
     
@@ -345,6 +345,8 @@ class SNPAutoencoder(pt.nn.Module):
         listdim=[]
         self.X=None
         self.Y=None
+        self.dfX=None
+        self.dfY=None
         if type(input_list) is list:
             for i in range(0,len(input_list)):
                 if type(input_list[i]) is pt.Tensor:
@@ -358,23 +360,25 @@ class SNPAutoencoder(pt.nn.Module):
             self.Y=output_shape
             output_shape=output_shape.shape
         if type(output_shape) is pt.Size or type(output_shape) is list:
-            outputdim=output_shape[1]
+            if (len(output_shape)==1):
+                outputdim=1
+            else: outputdim=output_shape[1]
         elif type(output_shape) is int:
             outputdim=output_shape
         else: return("error")
         
         #creating the parameters
         list_W_mu=[]
-        list_W_logvar=[]
+        list_W_alpha=[]
         for i in range(0, len(listdim)):
-            list_W_mu.append(pt.nn.Linear(listdim[i], 1))
-            list_W_logvar.append(pt.nn.Linear(listdim[i],1))
+            list_W_mu.append(pt.nn.Parameter(pt.tensor([[mu0]] * listdim[i], device=DEVICE, dtype=float), requires_grad=True))
+            list_W_alpha.append(pt.nn.Parameter(pt.tensor([[alpha0]] * listdim[i], device=DEVICE,dtype=float), requires_grad=True))
         self.list_W_mu=list_W_mu
-        self.list_W_logvar=list_W_logvar
+        self.list_W_alpha=list_W_alpha
         self.alpha=pt.nn.Parameter(pt.Tensor([[alpha0]] * len(listdim)), requires_grad=True) #alpha is a log
         self.mu=pt.nn.Parameter(pt.Tensor([[mu0] * outputdim] * len(listdim)), requires_grad=True)
-        self.optimizer = pt.optim.Adam(self.parameters(), amsgrad=True)
-        paramlist=[[params for params in mu.parameters()] for mu in self.list_W_mu] + [[params for params in alpha.parameters()] for alpha in self.list_W_logvar]
+        self.optimizer = pt.optim.Adam(self.parameters(), lr=0.01)
+        paramlist=[mu for mu in self.list_W_mu] + [alpha for alpha in self.list_W_alpha]
         for param in paramlist:
             self.optimizer.add_param_group({"params": param})
             
@@ -387,27 +391,24 @@ class SNPAutoencoder(pt.nn.Module):
         i=0
         for gene in data["X"].keys():
             autoencoder.dfX.append([gene, data["X"][gene], autoencoder.probalpha()[i]])
+            i += 1
         return autoencoder
             
     def forward(self,X):
         #encoding into genes
         genarray= []
-        for i in range(0,len(X)):
+        for i in range(len(X)):
             gen=pt.distributions.Normal(
-                loc = self.list_W_mu[i](X[i]), 
-                scale = self.list_W_logvar[i](X[i]).exp().pow(0.5))
+                loc = X[i] @ self.list_W_mu[i],
+                scale = X[i] @ (self.list_W_alpha[i] + pt.log(self.list_W_mu[i]**2 + 1e-8)).exp().pow(0.5)
+            )
             genarray.append(gen)
         
         #encoding into physiological traits
         gensample=[]
         for g in genarray:
             gensample.append(g.rsample())
-        gensample=pt.cat(gensample,1)
-        
-        #not sure about new version
-        # pW=pt.distributions.Normal(self.mu,(self.alpha + pt.log(self.mu**2 + 1e-8)).exp().pow(0.5))
-        # W=pW.rsample()
-        # Y=gensample@W
+        gensample=pt.cat(gensample,1).float()
         
         #need Y as a normal distribution for loglikelyhood
         Y=pt.distributions.Normal(
@@ -422,12 +423,15 @@ class SNPAutoencoder(pt.nn.Module):
         k2 = 1.87320
         k3 = 1.48695
         
-        kl=0
+        kl1=0
+        kl2=0
         ll=0
         
-        kl -= (k1 * pt.sigmoid(k2 + k3 * self.alpha) - 0.5 * pt.log1p(self.alpha.exp().pow(-1)) - k1).mean()
+        kl1 -= (k1 * pt.sigmoid(k2 + k3 * self.alpha) - 0.5 * pt.log1p(self.alpha.exp().pow(-1)) - k1).mean()
+        for i in range(len(self.list_W_alpha)):
+            kl2 -= (k1 * pt.sigmoid(k2 + k3 * self.list_W_alpha[i]) - 0.5 * pt.log1p(self.list_W_alpha[i].exp().pow(-1)) - k1).mean()
         ll += pred.log_prob(trueY).sum(1).mean(0)
-        return (kl - ll)
+        return (kl1 + kl2 - ll)
     
     def probalpha(self):
         alpha=self.alpha.exp()
@@ -435,11 +439,13 @@ class SNPAutoencoder(pt.nn.Module):
         return p
     
     def optimize(self, X = None, Y = None, epochmax = 10000, step=100):
+        pt.cuda.empty_cache()
         if X is None: X=self.X
         if Y is None: Y=self.Y
         losslist=[]
         plist=[]
         for epoch in range(0, epochmax):
+            pt.cuda.empty_cache()
             if (epoch * 100 % epochmax==0):
                 print(str(epoch * 100 / epochmax) + "%...")
             self.optimizer.zero_grad()
@@ -448,12 +454,12 @@ class SNPAutoencoder(pt.nn.Module):
             loss.backward(retain_graph=True)
             if (epoch % step == 0):
                 losslist.append(loss)
-                p=self.probalpha().detach().numpy()
+                p=self.probalpha().detach().cpu().numpy()
                 plist.append(p)
             self.optimizer.step()
             
         losslist.append(loss)
-        p=self.probalpha().detach().numpy()
+        p=self.probalpha().detach().cpu().numpy()
         plist.append(p)
         indexlist=list(range(0,epochmax,step))
         indexlist.append(epochmax)
@@ -474,22 +480,26 @@ class SNPAutoencoder(pt.nn.Module):
         prob=self.probalpha()
         i=0
         relevantgene=[]
-        for i in range(0,len(self.dfX)):
-            string=self.dfX[i][0] + ": " + "{:.4f}".format(prob[i].item())
-            if (prob[i].item()<SNPAutoencoder._pmin): 
-                relevantgene.append(i)
-            print(string)
-            i+=1
-        print("Gene(s) considered relevant:")
-        for gene in relevantgene:
-            print(self.dfX[gene][0])
+        if (self.dfX is None):
+            print(prob)
+            return
+        else:
+            for i in range(0,len(self.dfX)):
+                string=self.dfX[i][0] + ": " + "{:.4f}".format(prob[i].item())
+                if (prob[i].item()<SNPAutoencoder._pmin): 
+                    relevantgene.append(i)
+                print(string)
+                i+=1
+            print("Gene(s) considered relevant:")
+            for gene in relevantgene:
+                print(self.dfX[gene][0])
         
     def genSNPstrand(samplesize, nb_SNP):
         SNP=np.floor(abs(np.random.randn(samplesize, nb_SNP)))
         for sample in SNP:
             for snp in sample:
                 if snp>2: snp=2
-        return pt.Tensor(SNP)
+        return pt.tensor(SNP, device=DEVICE, dtype=float)
     
     @classmethod
     def genSNPprofile(cls,samplesize, nb_gene):
@@ -500,21 +510,24 @@ class SNPAutoencoder(pt.nn.Module):
         return ret
     
     @classmethod
-    def genfullprofile(cls, samplesize, nb_gene, nb_trait, nb_W2dim):
+    def genfullprofile(cls, samplesize, nb_gene, nb_trait, nb_W2dim, noise = 0.5):
         X=cls.genSNPprofile(samplesize, nb_gene)
         W1=[]
         Z=[]
         for i in range(0, nb_gene):
             Wi=abs(np.random.randn(X[i].shape[1]))
-            Wi=pt.Tensor(Wi)
+            Wi=pt.tensor(Wi, device=DEVICE, dtype=float)
             W1.append(Wi)
             Z.append(X[i] @ Wi)
         Z=pt.stack(Z).transpose(0,1) #Xi * Wi is a vector of shape (1,samplesize) rather than (samplesize,1) so when using pt.stack we have a shape (nbgene, samplesize) so we transpose
         
-        W2=pt.zeros(nb_gene, nb_trait)
+        W2=pt.zeros(nb_gene, nb_trait, device=DEVICE)
         for i in range(0,nb_W2dim):
                 W2[i]=np.random.randn()+1
-        Y=Z @ W2
+        Y=Z @ W2.double()
+        # noise=pt.normal(mean=pt.tensor([[0] * nb_trait] * samplesize, device=DEVICE), 
+        #             std=pt.tensor([[noise] * nb_trait] * samplesize, device=DEVICE))
+        # Y=Y + noise.rsample()
         return ({"X":X, "W1":W1, "Z":Z, "W2":W2, "Y":Y})
     
     def loadGeneticData(linkGenotype = _defaultGL, linkSNPmap= _defaultmap):
@@ -545,7 +558,8 @@ class SNPAutoencoder(pt.nn.Module):
         physio_data=pd.concat([volumetric_data,cognition_data], axis=1, join="inner")
         data=pd.concat([genotype,physio_data], axis=1, join="inner")
         Y=data.iloc[:,physio_dim:]
-        tensorY=pt.tensor(Y.values)
+        Y=Y["Hippocampus.bl"]
+        tensorY=pt.tensor(Y.values, device=DEVICE, dtype=float)
         X=data.iloc[:,:physio_dim]
         Xlist={}
         for gene in genmap.columns:
@@ -557,5 +571,5 @@ class SNPAutoencoder(pt.nn.Module):
         
         tensorX=[]
         for gene in Xlist:
-            tensorX.append(pt.Tensor(Xlist[gene].values))
+            tensorX.append(pt.tensor(Xlist[gene].values, device=DEVICE, dtype=float))
         return {"X":Xlist, "Tensor X":tensorX, "Y":Y, "Tensor Y":tensorY}
