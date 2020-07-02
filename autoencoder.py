@@ -377,7 +377,7 @@ class SNPAutoencoder(pt.nn.Module):
         self.list_W_alpha=list_W_alpha
         self.alpha=pt.nn.Parameter(pt.Tensor([[alpha0]] * len(listdim)), requires_grad=True) #alpha is a log
         self.mu=pt.nn.Parameter(pt.Tensor([[mu0] * outputdim] * len(listdim)), requires_grad=True)
-        self.optimizer = pt.optim.Adam(self.parameters(), lr=0.01)
+        self.optimizer = pt.optim.Adam(self.parameters(), lr=0.001)
         paramlist=[mu for mu in self.list_W_mu] + [alpha for alpha in self.list_W_alpha]
         for param in paramlist:
             self.optimizer.add_param_group({"params": param})
@@ -493,6 +493,12 @@ class SNPAutoencoder(pt.nn.Module):
             print("Gene(s) considered relevant:")
             for gene in relevantgene:
                 print(self.dfX[gene][0])
+        for i in range(len(self.dfX)):
+            print("Most important SNP(s) of gene " + self.dfX[i][0] + ":")
+            for i2 in range(len(self.list_W_mu[i])):
+                if (self.list_W_mu[i][i2] >= 0.1 and self.list_W_alpha[i][i2] <= 1):
+                    string=self.dfX[i][1].columns[i2] + ": mu=" + format(self.list_W_mu[i][i2].item(),".3f") + ", alpha=" + format(self.list_W_alpha[i][i2].item(),".3f")
+                    print(string)
         
     def genSNPstrand(samplesize, nb_SNP):
         SNP=np.floor(abs(np.random.randn(samplesize, nb_SNP)))
@@ -532,8 +538,14 @@ class SNPAutoencoder(pt.nn.Module):
     
     def loadGeneticData(linkGenotype = _defaultGL, linkSNPmap= _defaultmap):
         gencsv = pd.read_csv(linkGenotype, header=0, index_col=0)
+        
+        #we deal with missing values (-1 in the csv)
+        gencsv = gencsv[gencsv != -1]
+        mean = gencsv.mean(axis=1)
+        gencsv=gencsv.transpose() #fillna only works column by colum with series, so we transpose. We would need to transpose later anyway
+        gencsv.fillna(mean,inplace=True)
+        
         genmap = pd.read_csv(linkSNPmap, header=0, index_col=0)
-        gencsv=gencsv.transpose()
         return {"genotype":gencsv, "SNP into genes":genmap}
     
     def loadVolumetricData(linkVolume = _defaultVL, linkCognition = _defaultCL):
@@ -558,6 +570,7 @@ class SNPAutoencoder(pt.nn.Module):
         physio_data=pd.concat([volumetric_data,cognition_data], axis=1, join="inner")
         data=pd.concat([genotype,physio_data], axis=1, join="inner")
         Y=data.iloc[:,physio_dim:]
+        #Y=Y[["Hippocampus.bl","CDRSB.bl","ADAS11.bl","MMSE.bl","RAVLT.immediate.bl","RAVLT.forgetting.bl","FAQ.bl"]]
         Y=Y["Hippocampus.bl"]
         tensorY=pt.tensor(Y.values, device=DEVICE, dtype=float)
         X=data.iloc[:,:physio_dim]
@@ -572,4 +585,4 @@ class SNPAutoencoder(pt.nn.Module):
         tensorX=[]
         for gene in Xlist:
             tensorX.append(pt.tensor(Xlist[gene].values, device=DEVICE, dtype=float))
-        return {"X":Xlist, "Tensor X":tensorX, "Y":Y, "Tensor Y":tensorY}
+        return {"data":data, "X":Xlist, "Tensor X":tensorX, "Y":Y, "Tensor Y":tensorY}
