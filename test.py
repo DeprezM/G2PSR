@@ -11,6 +11,9 @@ import torch as pt
 import numpy as np
 from autoencoder import SNPAutoencoder as snp
 
+#for boxplot
+import matplotlib.pyplot as plt
+
 def test1():
     #parameters
     samplesize=500
@@ -54,4 +57,21 @@ def test2():
     
 pt.cuda.empty_cache()
 AutoEncoder=snp.CSVtoAutoEncoder()
-AutoEncoder.optimize(epochmax=50000, step=100)
+AutoEncoder.optimize(epochmax=40000, step=100)
+
+# data=snp.loadData()["data"]
+# snplist=["rs429358","rs7412"]
+# featlist=["WholeBrain.bl","Ventricles.bl","Hippocampus.bl","MidTemp.bl","Entorhinal.bl",
+#           "CDRSB.bl", "ADAS11.bl", "MMSE.bl", "RAVLT.immediate.bl", "RAVLT.learning.bl", "RAVLT.forgetting.bl", "FAQ.bl"]
+# for i in range(len(snplist)):
+#     rssnp=snplist[i]
+#     for i2 in range(len(featlist)):
+#         vol=featlist[i2]
+#         temp=data[[rssnp,vol]]
+#         fig,ax=plt.subplots()
+#         ax.set_title(rssnp+" "+vol)
+#         ax.boxplot([temp[temp[rssnp] == 0][vol], 
+#                     temp[temp[rssnp] == 1][vol], 
+#                     temp[temp[rssnp] == 2][vol]],
+#                     labels=[0,1,2])
+# plt.close()
