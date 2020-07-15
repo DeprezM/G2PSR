@@ -329,8 +329,8 @@ class VDonWeightAE(pt.nn.Module): #seems extremely robust to noise when it comes
         
     
 class SNPAutoencoder(pt.nn.Module):
-    strand_max=10
-    strand_min=3
+    strand_max=200
+    strand_min=50
     
     _defaultVL = "https://marcolorenzi.github.io/material/winter_school/volumes.csv"
     _defaultCL = "https://marcolorenzi.github.io/material/winter_school/cognition.csv"
@@ -444,6 +444,7 @@ class SNPAutoencoder(pt.nn.Module):
         if Y is None: Y=self.Y
         losslist=[]
         plist=[]
+        mulist=[]
         for epoch in range(0, epochmax):
             pt.cuda.empty_cache()
             if (epoch * 100 % epochmax==0):
@@ -456,20 +457,39 @@ class SNPAutoencoder(pt.nn.Module):
                 losslist.append(loss)
                 p=self.probalpha().detach().cpu().numpy()
                 plist.append(p)
+                mu=self.mu.mean(1).detach().cpu().numpy()
+                mulist.append(mu)
             self.optimizer.step()
             
+        #we add a final value for the plots to be complete even if epochmax is not a multiple of step
         losslist.append(loss)
         p=self.probalpha().detach().cpu().numpy()
         plist.append(p)
+        mu=self.mu.mean(1).detach().cpu().numpy()
+        mulist.append(mu)
+        
+        #we make the plots
         indexlist=list(range(0,epochmax,step))
         indexlist.append(epochmax)
         fig=plt.figure()
         plt.plot(indexlist,losslist, figure=fig)
         fig2=plt.figure()
         plist=np.reshape(plist, (len(plist), len(plist[0])))
-        plt.plot(indexlist,plist)
+        for i in range(len(plist)):
+            if self.dfX is None:
+                plt.plot(indexlist,plist[i], figure=fig2, label=i)
+            else:
+                plt.plot(indexlist,plist[i], figure=fig2, label=self.dfX[i][0])
+        plt.plot(indexlist ,[0.05] * len(indexlist), '--k', figure=fig2, label="p=0.05")
         plt.legend()
         plt.ylim(0,1)
+        fig3=plt.figure()
+        for i in range(len(mulist)):
+            if self.dfX is None:
+                plt.plot(indexlist,mulist[i], figure=fig3, label=i)
+            else:
+                plt.plot(indexlist,mulist[i], figure=fig3, label=self.dfX[i][0])
+        plt.ylim(0,2)
         
         self.summary()
     
@@ -516,7 +536,7 @@ class SNPAutoencoder(pt.nn.Module):
         return ret
     
     @classmethod
-    def genfullprofile(cls, samplesize, nb_gene, nb_trait, nb_W2dim, noise = 0.5):
+    def genfullprofile(cls, samplesize, nb_gene, nb_trait, nb_W2dim, noise = float(0.05)):
         X=cls.genSNPprofile(samplesize, nb_gene)
         W1=[]
         Z=[]
@@ -529,11 +549,12 @@ class SNPAutoencoder(pt.nn.Module):
         
         W2=pt.zeros(nb_gene, nb_trait, device=DEVICE)
         for i in range(0,nb_W2dim):
-                W2[i]=np.random.randn()+1
+            for i2 in range(nb_trait):
+                W2[i][i2]=np.random.randn()+1
         Y=Z @ W2.double()
-        # noise=pt.normal(mean=pt.tensor([[0] * nb_trait] * samplesize, device=DEVICE), 
-        #             std=pt.tensor([[noise] * nb_trait] * samplesize, device=DEVICE))
-        # Y=Y + noise.rsample()
+        noise=pt.normal(mean=pt.tensor([[0] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE), 
+                    std=pt.tensor([[noise] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE))
+        Y=Y + noise
         return ({"X":X, "W1":W1, "Z":Z, "W2":W2, "Y":Y})
     
     def loadGeneticData(linkGenotype = _defaultGL, linkSNPmap= _defaultmap):

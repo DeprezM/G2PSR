@@ -43,24 +43,23 @@ def test1():
     
     return test
     
-def test2():
-    test=snp.genfullprofile(500, 4, 10, 1)
-    X=test["X"]
-    Y=test["Y"]
+#def test2():
+test=snp.genfullprofile(500, 4, 11, 1)
+X=test["X"]
+Y=test["Y"]
+
+test2=snp(X, Y).to(a.DEVICE)
+#stat=test["W2"] * test["Z"].transpose(0,1)
+test2.optimize(X, Y, 10000)
+print(test["W2"])
+#print(stat.mean(1))
     
-    test2=snp(X, Y).to(a.DEVICE)
-    #stat=test["W2"] * test["Z"].transpose(0,1)
-    test2.optimize(X, Y, 100000)
-    print(test["W2"])
-    #print(stat.mean(1))
-    return test2
-    
-pt.cuda.empty_cache()
-AutoEncoder=snp.CSVtoAutoEncoder()
-AutoEncoder.optimize(epochmax=40000, step=100)
+# pt.cuda.empty_cache()
+# AutoEncoder=snp.CSVtoAutoEncoder()
+# AutoEncoder.optimize(epochmax=60000, step=100)
 
 # data=snp.loadData()["data"]
-# snplist=["rs429358","rs7412"]
+# snplist=["rs72654468","rs1295687"]
 # featlist=["WholeBrain.bl","Ventricles.bl","Hippocampus.bl","MidTemp.bl","Entorhinal.bl",
 #           "CDRSB.bl", "ADAS11.bl", "MMSE.bl", "RAVLT.immediate.bl", "RAVLT.learning.bl", "RAVLT.forgetting.bl", "FAQ.bl"]
 # for i in range(len(snplist)):
