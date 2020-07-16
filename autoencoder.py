@@ -369,16 +369,16 @@ class SNPAutoencoder(pt.nn.Module):
         
         #creating the parameters
         list_W_mu=[]
-        list_W_alpha=[]
+        list_W_logvar=[]
         for i in range(0, len(listdim)):
-            list_W_mu.append(pt.nn.Parameter(pt.tensor([[mu0]] * listdim[i], device=DEVICE, dtype=float), requires_grad=True))
-            list_W_alpha.append(pt.nn.Parameter(pt.tensor([[alpha0]] * listdim[i], device=DEVICE,dtype=float), requires_grad=True))
+            list_W_mu.append(pt.nn.Linear(listdim[i], 1, bias=False).to(DEVICE))
+            list_W_logvar.append(pt.nn.Linear(listdim[i],1, bias=False).to(DEVICE))
         self.list_W_mu=list_W_mu
-        self.list_W_alpha=list_W_alpha
+        self.list_W_logvar=list_W_logvar
         self.alpha=pt.nn.Parameter(pt.Tensor([[alpha0]] * len(listdim)), requires_grad=True) #alpha is a log
         self.mu=pt.nn.Parameter(pt.Tensor([[mu0] * outputdim] * len(listdim)), requires_grad=True)
         self.optimizer = pt.optim.Adam(self.parameters(), lr=0.001)
-        paramlist=[mu for mu in self.list_W_mu] + [alpha for alpha in self.list_W_alpha]
+        paramlist=[[params for params in mu.parameters()] for mu in self.list_W_mu] + [[params for params in alpha.parameters()] for alpha in self.list_W_logvar]
         for param in paramlist:
             self.optimizer.add_param_group({"params": param})
             
@@ -399,8 +399,8 @@ class SNPAutoencoder(pt.nn.Module):
         genarray= []
         for i in range(len(X)):
             gen=pt.distributions.Normal(
-                loc = X[i] @ self.list_W_mu[i],
-                scale = X[i] @ (self.list_W_alpha[i] + pt.log(self.list_W_mu[i]**2 + 1e-8)).exp().pow(0.5)
+                loc = self.list_W_mu[i](X[i].float()),
+                scale = (self.list_W_logvar[i](X[i].float())).exp().pow(0.5)
             )
             genarray.append(gen)
         
@@ -428,8 +428,8 @@ class SNPAutoencoder(pt.nn.Module):
         ll=0
         
         kl1 -= (k1 * pt.sigmoid(k2 + k3 * self.alpha) - 0.5 * pt.log1p(self.alpha.exp().pow(-1)) - k1).mean()
-        for i in range(len(self.list_W_alpha)):
-            kl2 -= (k1 * pt.sigmoid(k2 + k3 * self.list_W_alpha[i]) - 0.5 * pt.log1p(self.list_W_alpha[i].exp().pow(-1)) - k1).mean()
+        # for i in range(len(self.list_W_alpha)):
+        #     kl2 -= (k1 * pt.sigmoid(k2 + k3 * self.list_W_alpha[i]) - 0.5 * pt.log1p(self.list_W_alpha[i].exp().pow(-1)) - k1).mean()
         ll += pred.log_prob(trueY).sum(1).mean(0)
         return (kl1 + kl2 - ll)
     
@@ -455,9 +455,9 @@ class SNPAutoencoder(pt.nn.Module):
             loss.backward(retain_graph=True)
             if (epoch % step == 0):
                 losslist.append(loss)
-                p=self.probalpha().detach().cpu().numpy()
+                p=self.probalpha().detach().cpu().numpy() #add the probability of the genes being not relevant
                 plist.append(p)
-                mu=self.mu.mean(1).detach().cpu().numpy()
+                mu=abs(self.mu.mean(1).detach().cpu().numpy()) #add the mean of the weights
                 mulist.append(mu)
             self.optimizer.step()
             
@@ -465,16 +465,16 @@ class SNPAutoencoder(pt.nn.Module):
         losslist.append(loss)
         p=self.probalpha().detach().cpu().numpy()
         plist.append(p)
-        mu=self.mu.mean(1).detach().cpu().numpy()
+        mu=abs(self.mu.mean(1).detach().cpu().numpy())
         mulist.append(mu)
         
         #we make the plots
         indexlist=list(range(0,epochmax,step))
         indexlist.append(epochmax)
         fig=plt.figure()
-        plt.plot(indexlist,losslist, figure=fig)
+        plt.plot(indexlist[1:],losslist[1:], figure=fig)
         fig2=plt.figure()
-        plist=np.reshape(plist, (len(plist), len(plist[0])))
+        plist=np.reshape(plist, (len(plist), len(plist[0]))).transpose()
         for i in range(len(plist)):
             if self.dfX is None:
                 plt.plot(indexlist,plist[i], figure=fig2, label=i)
@@ -484,12 +484,14 @@ class SNPAutoencoder(pt.nn.Module):
         plt.legend()
         plt.ylim(0,1)
         fig3=plt.figure()
+        mulist=np.reshape(mulist, (len(mulist), len(mulist[0]))).transpose()
         for i in range(len(mulist)):
             if self.dfX is None:
                 plt.plot(indexlist,mulist[i], figure=fig3, label=i)
             else:
                 plt.plot(indexlist,mulist[i], figure=fig3, label=self.dfX[i][0])
-        plt.ylim(0,2)
+        plt.legend()
+        plt.ylim(bottom=0)
         
         self.summary()
     
