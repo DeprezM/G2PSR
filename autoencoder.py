@@ -338,7 +338,7 @@ class SNPAutoencoder(pt.nn.Module):
     _defaultmap = "matrix_snp_gene_example_1.csv"
     _pmin= 0.05 #the value of p under which we keep the gene for analysis of its SNP
     
-    def __init__(self, input_list, output_shape, mu0=1, alpha0=0):
+    def __init__(self, input_list, output_shape, mu0=1, alpha0=0, logvar0=0.5):
         super().__init__()
         
         #getting the dimension
@@ -371,8 +371,12 @@ class SNPAutoencoder(pt.nn.Module):
         list_W_mu=[]
         list_W_logvar=[]
         for i in range(0, len(listdim)):
-            list_W_mu.append(pt.nn.Linear(listdim[i], 1, bias=False).to(DEVICE))
-            list_W_logvar.append(pt.nn.Linear(listdim[i],1, bias=False).to(DEVICE))
+            mu = pt.nn.Linear(listdim[i], 1, bias=False).to(DEVICE)
+            mu.weight = pt.nn.Parameter(pt.tensor([[mu0] * listdim[i]], dtype=pt.float, device=DEVICE))
+            logvar = pt.nn.Linear(listdim[i],1, bias=False).to(DEVICE)
+            logvar.weight = pt.nn.Parameter(pt.tensor([[logvar0] * listdim[i]], dtype=pt.float, device=DEVICE))
+            list_W_mu.append(mu)
+            list_W_logvar.append(logvar)
         self.list_W_mu=list_W_mu
         self.list_W_logvar=list_W_logvar
         self.alpha=pt.nn.Parameter(pt.Tensor([[alpha0]] * len(listdim)), requires_grad=True) #alpha is a log
@@ -381,6 +385,7 @@ class SNPAutoencoder(pt.nn.Module):
         paramlist=[[params for params in mu.parameters()] for mu in self.list_W_mu] + [[params for params in alpha.parameters()] for alpha in self.list_W_logvar]
         for param in paramlist:
             self.optimizer.add_param_group({"params": param})
+
             
     @classmethod
     def CSVtoAutoEncoder(cls, linkGenotype=_defaultGL, linkSNPmap=_defaultmap, linkVolume=_defaultVL, linkCognition=_defaultCL):
@@ -480,7 +485,7 @@ class SNPAutoencoder(pt.nn.Module):
                 plt.plot(indexlist,plist[i], figure=fig2, label=i)
             else:
                 plt.plot(indexlist,plist[i], figure=fig2, label=self.dfX[i][0])
-        plt.plot(indexlist ,[0.05] * len(indexlist), '--k', figure=fig2, label="p=0.05")
+        plt.plot(indexlist ,[SNPAutoencoder._pmin] * len(indexlist), '--k', figure=fig2, label="p=0.05")
         plt.legend()
         plt.ylim(0,1)
         fig3=plt.figure()
