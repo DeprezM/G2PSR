@@ -337,8 +337,9 @@ class SNPAutoencoder(pt.nn.Module):
     _defaultGL = "Genotype_matrix_example1.csv"
     _defaultmap = "matrix_snp_gene_example_1.csv"
     _pmin= 0.05 #the value of p under which we keep the gene for analysis of its SNP
+    _bias=1 #the average value of the generated physiological traits
     
-    def __init__(self, input_list, output_shape, mu0=1, alpha0=0, logvar0=0.5):
+    def __init__(self, input_list, output_shape, mu0=1, alpha0=0, logvar0=0.5, bias0=0):
         super().__init__()
         
         #getting the dimension
@@ -381,6 +382,10 @@ class SNPAutoencoder(pt.nn.Module):
         self.list_W_logvar=list_W_logvar
         self.alpha=pt.nn.Parameter(pt.Tensor([[alpha0]] * len(listdim)), requires_grad=True) #alpha is a log
         self.mu=pt.nn.Parameter(pt.Tensor([[mu0] * outputdim] * len(listdim)), requires_grad=True)
+        if self.Y is not None:
+            bias=pt.nn.Parameter(self.Y.mean(0).clone().detach(), requires_grad=True)
+        else: bias=pt.nn.Parameter(pt.tensor([[bias0] * outputdim], dtype=float), requires_grad=True)
+        self.bias=bias
         self.optimizer = pt.optim.Adam(self.parameters(), lr=0.001)
         paramlist=[[params for params in mu.parameters()] for mu in self.list_W_mu] + [[params for params in alpha.parameters()] for alpha in self.list_W_logvar]
         for param in paramlist:
@@ -417,7 +422,7 @@ class SNPAutoencoder(pt.nn.Module):
         
         #need Y as a normal distribution for loglikelyhood
         Y=pt.distributions.Normal(
-            loc = gensample @ self.mu,
+            loc = (gensample @ self.mu) + self.bias,
             scale = abs(gensample) @ (self.alpha + pt.log(self.mu**2 + 1e-8)).exp().pow(0.5)
             )
         
@@ -501,8 +506,9 @@ class SNPAutoencoder(pt.nn.Module):
         self.summary()
     
     def summary(self, **kwargs):
-        if self.X is not None or len(self.X)!=0:
-            print((self.forward(self.X)["Y"].rsample()-self.Y).mean())
+        if self.X is not None and self.Y is not None:
+            if len(self.X)!=0 and len(self.Y)!=0:
+                print("Average difference with target" + str((self.forward(self.X)["Y"].rsample()-self.Y).mean()))
         print("probability that the gene is not relevant: ")
         prob=self.probalpha()
         i=0
@@ -557,11 +563,13 @@ class SNPAutoencoder(pt.nn.Module):
         W2=pt.zeros(nb_gene, nb_trait, device=DEVICE)
         for i in range(0,nb_W2dim):
             for i2 in range(nb_trait):
-                W2[i][i2]=np.random.randn()+1
+                W2[i][i2]=np.random.randn()
         Y=Z @ W2.double()
+        Y=Y + pt.tensor([[cls._bias] * Y.shape[1]] * Y.shape[0], device=DEVICE)
         noise=pt.normal(mean=pt.tensor([[0] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE), 
-                    std=pt.tensor([[noise] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE))
+                    std=pt.tensor([[noise * cls._bias] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE))
         Y=Y + noise
+        pt.cuda.empty_cache()
         return ({"X":X, "W1":W1, "Z":Z, "W2":W2, "Y":Y})
     
     def loadGeneticData(linkGenotype = _defaultGL, linkSNPmap= _defaultmap):
