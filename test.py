@@ -45,7 +45,7 @@ def test1():
     
 #def test2():
 pt.cuda.empty_cache()
-test=snp.genfullprofile(500, 6, 11, 2, noise=0.00)
+test=snp.genfullprofile(500, 4, 11, 1, noise=0.05)
 X=test["X"]
 Y=test["Y"]
 

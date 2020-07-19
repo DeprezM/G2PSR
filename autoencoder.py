@@ -551,26 +551,25 @@ class SNPAutoencoder(pt.nn.Module):
     @classmethod
     def genfullprofile(cls, samplesize, nb_gene, nb_trait, nb_W2dim, noise = float(0.05)):
         X=cls.genSNPprofile(samplesize, nb_gene)
-        W1=[]
+        W=[]
         Z=[]
-        for i in range(0, nb_gene):
-            Wi=abs(np.random.randn(X[i].shape[1]))
+        for i in range(nb_W2dim):
+            Wi=abs(np.random.randn(X[i].shape[1],nb_trait))
             Wi=pt.tensor(Wi, device=DEVICE, dtype=float)
-            W1.append(Wi)
+            W.append(Wi)
             Z.append(X[i] @ Wi)
-        Z=pt.stack(Z).transpose(0,1) #Xi * Wi is a vector of shape (1,samplesize) rather than (samplesize,1) so when using pt.stack we have a shape (nbgene, samplesize) so we transpose
-        
-        W2=pt.zeros(nb_gene, nb_trait, device=DEVICE)
-        for i in range(0,nb_W2dim):
-            for i2 in range(nb_trait):
-                W2[i][i2]=np.random.randn()
-        Y=Z @ W2.double()
+        for i in range(nb_W2dim, nb_gene):
+            Wi=[[0] * nb_trait] * X[i].shape[1]
+            Wi=pt.tensor(Wi, device=DEVICE, dtype=float)
+            W.append(W)
+            Z.append(X[i] @ Wi)
+        Y=sum(Z)
         Y=Y + pt.tensor([[cls._bias] * Y.shape[1]] * Y.shape[0], device=DEVICE)
         noise=pt.normal(mean=pt.tensor([[0] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE), 
                     std=pt.tensor([[noise * cls._bias] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE))
         Y=Y + noise
         pt.cuda.empty_cache()
-        return ({"X":X, "W1":W1, "Z":Z, "W2":W2, "Y":Y})
+        return ({"X":X, "W":W, "Z":Z, "Y":Y})
     
     def loadGeneticData(linkGenotype = _defaultGL, linkSNPmap= _defaultmap):
         gencsv = pd.read_csv(linkGenotype, header=0, index_col=0)
