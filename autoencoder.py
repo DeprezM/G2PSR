@@ -503,12 +503,18 @@ class SNPAutoencoder(pt.nn.Module):
         plt.legend()
         plt.ylim(bottom=0)
         
+        del losslist
+        del plist
+        del mulist
+        
+        pt.cuda.empty_cache()
+        
         self.summary()
     
     def summary(self, **kwargs):
         if self.X is not None and self.Y is not None:
             if len(self.X)!=0 and len(self.Y)!=0:
-                print("Average difference with target" + str((self.forward(self.X)["Y"].rsample()-self.Y).mean()))
+                print("Average difference with target: " + str((self.forward(self.X)["Y"].rsample()-self.Y).mean()))
         print("probability that the gene is not relevant: ")
         prob=self.probalpha()
         i=0
