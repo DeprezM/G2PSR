@@ -45,12 +45,12 @@ def test1():
     
 #def test2():
 pt.cuda.empty_cache()
-test=snp.genfullprofile(500, 4, 11, 1, noise=0.05)
+test=snp.genfullprofile(500, 4, 11, 1, noise=0.0)
 X=test["X"]
 Y=test["Y"]
 
 pt.cuda.empty_cache()
-test2=snp(X, 11).to(a.DEVICE)
+test2=snp(X, Y).to(a.DEVICE)
 #stat=test["W2"] * test["Z"].transpose(0,1)
 test2.optimize(X, Y, 10000)
 #print(stat.mean(1))
