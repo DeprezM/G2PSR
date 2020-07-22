@@ -483,15 +483,21 @@ class SNPAutoencoder(pt.nn.Module):
         indexlist.append(epochmax)
         fig=plt.figure()
         plt.plot(indexlist[1:],losslist[1:], figure=fig)
+        fig.suptitle("Loss function depending on epoch")
+        plt.xlabel("epoch")
+        plt.ylabel("loss value")
         fig2=plt.figure()
         plist=np.reshape(plist, (len(plist), len(plist[0]))).transpose()
         for i in range(len(plist)):
             if self.dfX is None:
                 plt.plot(indexlist,plist[i], figure=fig2, label=i)
             else:
-                plt.plot(indexlist,plist[i], figure=fig2, label=self.dfX[i][0])
+                plt.plot(indexlist,plist[i], figure=fig2, name="p(alpha)", label=self.dfX[i][0])
         plt.plot(indexlist ,[SNPAutoencoder._pmin] * len(indexlist), '--k', figure=fig2, label="p=0.05")
         plt.legend()
+        fig2.suptitle("probability of the dimension being non significant")
+        plt.xlabel("epoch")
+        plt.ylabel("p(alpha)")
         plt.ylim(0,1)
         fig3=plt.figure()
         mulist=np.reshape(mulist, (len(mulist), len(mulist[0]))).transpose()
@@ -499,7 +505,10 @@ class SNPAutoencoder(pt.nn.Module):
             if self.dfX is None:
                 plt.plot(indexlist,mulist[i], figure=fig3, label=i)
             else:
-                plt.plot(indexlist,mulist[i], figure=fig3, label=self.dfX[i][0])
+                plt.plot(indexlist,mulist[i], figure=fig3, name="weight", label=self.dfX[i][0])
+        fig3.suptitle("Weight depending on epoch")
+        plt.xlabel("epoch")
+        plt.ylabel("weight")
         plt.legend()
         plt.ylim(bottom=0)
         
@@ -567,7 +576,7 @@ class SNPAutoencoder(pt.nn.Module):
         for i in range(nb_W2dim, nb_gene):
             Wi=[[0] * nb_trait] * X[i].shape[1]
             Wi=pt.tensor(Wi, device=DEVICE, dtype=float)
-            W.append(W)
+            W.append(Wi)
             Z.append(X[i] @ Wi)
         Y=sum(Z)
         Y=Y + pt.tensor([[cls._bias] * Y.shape[1]] * Y.shape[0], device=DEVICE)
