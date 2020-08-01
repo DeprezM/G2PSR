@@ -19,8 +19,8 @@ class SNPAutoencoder(pt.nn.Module):
     
     _defaultVL = "https://marcolorenzi.github.io/material/winter_school/volumes.csv"
     _defaultCL = "https://marcolorenzi.github.io/material/winter_school/cognition.csv"
-    _defaultGL = "Genotype_matrix_example1.csv"
-    _defaultmap = "matrix_snp_gene_example_1.csv"
+    _defaultGL = "C:/Users/morei/Documents/_2019-2020Stage/INRIA/Gitlab/pathways-ae/Genotype_matrice.txt"
+    _defaultmap = "C:/Users/morei/Documents/_2019-2020Stage/INRIA/Gitlab/pathways-ae/matrix_snp_gene.txt"
     _pmin= 0.05 #the value of p under which we keep the gene for analysis of its SNP
     _bias=1 #the average value of the generated physiological traits
     
@@ -123,8 +123,6 @@ class SNPAutoencoder(pt.nn.Module):
         ll=0
         
         kl1 -= (k1 * pt.sigmoid(k2 + k3 * self.alpha) - 0.5 * pt.log1p(self.alpha.exp().pow(-1)) - k1).mean()
-        # for i in range(len(self.list_W_alpha)):
-        #     kl2 -= (k1 * pt.sigmoid(k2 + k3 * self.list_W_alpha[i]) - 0.5 * pt.log1p(self.list_W_alpha[i].exp().pow(-1)) - k1).mean()
         ll += pred.log_prob(trueY).sum(1).mean(0)
         return (kl1 + kl2 - ll)
     
@@ -177,7 +175,7 @@ class SNPAutoencoder(pt.nn.Module):
             if self.dfX is None:
                 plt.plot(indexlist,plist[i], figure=fig2, label=i)
             else:
-                plt.plot(indexlist,plist[i], figure=fig2, name="p(alpha)", label=self.dfX[i][0])
+                plt.plot(indexlist,plist[i], figure=fig2, label=self.dfX[i][0])
         plt.plot(indexlist ,[SNPAutoencoder._pmin] * len(indexlist), '--k', figure=fig2, label="p=0.05")
         plt.legend()
         fig2.suptitle("probability of the dimension being non significant")
@@ -190,7 +188,7 @@ class SNPAutoencoder(pt.nn.Module):
             if self.dfX is None:
                 plt.plot(indexlist,mulist[i], figure=fig3, label=i)
             else:
-                plt.plot(indexlist,mulist[i], figure=fig3, name="weight", label=self.dfX[i][0])
+                plt.plot(indexlist,mulist[i], figure=fig3, label=self.dfX[i][0])
         fig3.suptitle("Weight depending on epoch")
         plt.xlabel("epoch")
         plt.ylabel("weight")
@@ -205,7 +203,7 @@ class SNPAutoencoder(pt.nn.Module):
         
         self.summary()
     
-    def summary(self, **kwargs):
+    def summary(self):
         if self.X is not None and self.Y is not None:
             if len(self.X)!=0 and len(self.Y)!=0:
                 print("Average difference with target: " + str((self.forward(self.X)["Y"].rsample()-self.Y).mean()))
@@ -228,29 +226,24 @@ class SNPAutoencoder(pt.nn.Module):
                 print(self.dfX[gene][0])
         for i in range(len(self.dfX)):
             print("Most important SNP(s) of gene " + self.dfX[i][0] + ":")
-            for i2 in range(len(self.list_W_mu[i])):
-                if (self.list_W_mu[i][i2] >= 0.1 and self.list_W_alpha[i][i2] <= 1):
-                    string=self.dfX[i][1].columns[i2] + ": mu=" + format(self.list_W_mu[i][i2].item(),".3f") + ", alpha=" + format(self.list_W_alpha[i][i2].item(),".3f")
+            for i2 in range(self.list_W_mu[i].in_features):
+                strmu=""
+                if abs(self.list_W_mu[i].weight[0][i2]) >= 0.1:
+                    strmu+=str(self.list_W_mu[i].weight[0][i2].item()) + ", "
+                    string=self.dfX[i][1].columns[i2] + ": mu=" + strmu
                     print(string)
         
-    def genSNPstrand(samplesize, nb_SNP):
-        SNP=np.floor(abs(np.random.randn(samplesize, nb_SNP)))
-        for sample in SNP:
-            for snp in sample:
-                if snp>2: snp=2
-        return pt.tensor(SNP, device=DEVICE, dtype=float)
-    
-    @classmethod
-    def genSNPprofile(cls,samplesize, nb_gene):
-        ret=[]
-        for i in range(0,nb_gene):
-            nb_SNP=np.random.randint(cls.strand_min,cls.strand_max)
-            ret.append(cls.genSNPstrand(samplesize, nb_SNP))
-        return ret
-    
     @classmethod
     def genfullprofile(cls, samplesize, nb_gene, nb_trait, nb_W2dim, noise = float(0.05)):
-        X=cls.genSNPprofile(samplesize, nb_gene)
+        X=[]
+        for i in range(0,nb_gene):
+            nb_SNP=np.random.randint(cls.strand_min,cls.strand_max)
+            SNP=np.floor(abs(np.random.randn(samplesize, nb_SNP)))
+            for sample in SNP:
+                for snp in sample:
+                    if snp>2: snp=2
+            SNP = pt.tensor(SNP, device=DEVICE, dtype=float)
+            X.append(SNP)
         W=[]
         Z=[]
         for i in range(nb_W2dim):
@@ -280,6 +273,10 @@ class SNPAutoencoder(pt.nn.Module):
         gencsv=gencsv.transpose() #fillna only works column by colum with series, so we transpose. We would need to transpose later anyway
         gencsv.fillna(mean,inplace=True)
         
+        gencsv[gencsv == 2] = 4
+        gencsv[gencsv == 0] = 2
+        gencsv[gencsv == 4] = 0
+        
         genmap = pd.read_csv(linkSNPmap, header=0, index_col=0)
         return {"genotype":gencsv, "SNP into genes":genmap}
     
@@ -305,8 +302,8 @@ class SNPAutoencoder(pt.nn.Module):
         physio_data=pd.concat([volumetric_data,cognition_data], axis=1, join="inner")
         data=pd.concat([genotype,physio_data], axis=1, join="inner")
         Y=data.iloc[:,physio_dim:]
-        #Y=Y[["Hippocampus.bl","CDRSB.bl","ADAS11.bl","MMSE.bl","RAVLT.immediate.bl","RAVLT.forgetting.bl","FAQ.bl"]]
-        Y=Y["Hippocampus.bl"]
+        Y=Y[["Hippocampus.bl","Entorhinal.bl","CDRSB.bl","ADAS11.bl","MMSE.bl","RAVLT.immediate.bl","RAVLT.forgetting.bl","FAQ.bl"]]
+        #Y=Y["Hippocampus.bl"]
         tensorY=pt.tensor(Y.values, device=DEVICE, dtype=float)
         X=data.iloc[:,:physio_dim]
         Xlist={}
@@ -321,3 +318,20 @@ class SNPAutoencoder(pt.nn.Module):
         for gene in Xlist:
             tensorX.append(pt.tensor(Xlist[gene].values, device=DEVICE, dtype=float))
         return {"data":data, "X":Xlist, "Tensor X":tensorX, "Y":Y, "Tensor Y":tensorY}
+    
+    
+    @classmethod
+    def boxplot(cls,snplist,featlist):
+        data=cls.loadData()["data"]
+        for i in range(len(snplist)):
+            rssnp=snplist[i]
+            for i2 in range(len(featlist)):
+                vol=featlist[i2]
+                temp=data[[rssnp,vol]]
+                fig,ax=plt.subplots()
+                ax.set_title(rssnp+" "+vol)
+                ax.boxplot([temp[temp[rssnp] == 0][vol], 
+                            temp[temp[rssnp] == 1][vol], 
+                            temp[temp[rssnp] == 2][vol]],
+                            labels=[0,1,2])
+        plt.close()
