@@ -123,7 +123,18 @@ class SNPAutoencoder(pt.nn.Module):
         ll=0
         
         kl1 -= (k1 * pt.sigmoid(k2 + k3 * self.alpha) - 0.5 * pt.log1p(self.alpha.exp().pow(-1)) - k1).mean()
-        ll += pred.log_prob(trueY).sum(1).mean(0)
+        ll += pred.log_prob(trueY)
+        
+        nanpos=ll!=ll
+        if nanpos.sum()>0:
+            trueloc=pred.loc==trueY
+            prob_is_high=(nanpos * trueloc)
+            prob_is_0=nanpos ^ prob_is_high
+            ll[prob_is_high]=10
+            ll[prob_is_0]=-1e3
+        
+        ll=ll.sum(1).mean(0)
+        
         return (kl1 + kl2 - ll)
     
     def probalpha(self):
@@ -145,7 +156,10 @@ class SNPAutoencoder(pt.nn.Module):
             self.optimizer.zero_grad()
             pred=self.forward(X)
             loss=self.loss_function(pred["Y"], Y)
-            loss.backward(retain_graph=True)
+            loss.backward()
+            for x in self.list_W_logvar:
+                for i in range(len(x.weight.grad[0])):
+                    if x.weight.grad[0][i]!=x.weight.grad[0][i]: x.weight.grad[0][i]=0
             if (epoch % step == 0):
                 losslist.append(loss)
                 p=self.probalpha().detach().cpu().numpy() #add the probability of the genes being not relevant
@@ -171,11 +185,23 @@ class SNPAutoencoder(pt.nn.Module):
         plt.ylabel("loss value")
         fig2=plt.figure()
         plist=np.reshape(plist, (len(plist), len(plist[0]))).transpose()
-        for i in range(len(plist)):
-            if self.dfX is None:
-                plt.plot(indexlist,plist[i], figure=fig2, label=i)
-            else:
-                plt.plot(indexlist,plist[i], figure=fig2, label=self.dfX[i][0])
+        if (len(X)<11):
+            for i in range(len(plist)):
+                if self.dfX is None:
+                    plt.plot(indexlist,plist[i], figure=fig2, label=i)
+                else:
+                    plt.plot(indexlist,plist[i], figure=fig2, label=self.dfX[i][0])
+        else:
+            for i in range(1):
+                if self.dfX is None:
+                    plt.plot(indexlist,plist[i], 'o', figure=fig2, label=i)
+                else:
+                    plt.plot(indexlist,plist[i], 'o', figure=fig2, label=self.dfX[i][0])
+            for i in range(1, len(plist)):
+                if self.dfX is None:
+                    plt.plot(indexlist,plist[i], figure=fig2)
+                else:
+                    plt.plot(indexlist,plist[i], figure=fig2)
         plt.plot(indexlist ,[SNPAutoencoder._pmin] * len(indexlist), '--k', figure=fig2, label="p=0.05")
         plt.legend()
         fig2.suptitle("probability of the dimension being non significant")
@@ -248,6 +274,8 @@ class SNPAutoencoder(pt.nn.Module):
         Z=[]
         for i in range(nb_W2dim):
             Wi=abs(np.random.randn(X[i].shape[1],nb_trait))
+            for i2 in range(4, nb_trait):
+                Wi[:,i2]=0
             Wi=pt.tensor(Wi, device=DEVICE, dtype=float)
             W.append(Wi)
             Z.append(X[i] @ Wi)

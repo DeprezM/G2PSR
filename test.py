@@ -15,17 +15,17 @@ import matplotlib.pyplot as plt
 
 #%%
 pt.cuda.empty_cache()
-test=snp.genfullprofile(500, 4, 11, 1, noise=0.05)
+test=snp.genfullprofile(500, 20, 1, 1, noise=0.80)
 X=test["X"]
 Y=test["Y"]
 pt.cuda.empty_cache()
 test2=snp(X, Y).to(a.DEVICE)
-test2.optimize(X, Y, 10000)
+test2.optimize(X, Y, 200)
 
 #%%    
 pt.cuda.empty_cache()
 AutoEncoder=snp.CSVtoAutoEncoder()
-AutoEncoder.optimize(epochmax=80000, step=100)
+AutoEncoder.optimize(epochmax=150000, step=100)
 
 #%%
 snplist=["rs7412","rs429358"]
