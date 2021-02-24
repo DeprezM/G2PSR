@@ -16,8 +16,8 @@ import os
 # DEVICE = pt.device('cuda' if pt.cuda.is_available() else 'cpu')
 
 class SNP_bnn(pt.nn.Module):
-    strand_max=200
-    strand_min=50
+    strand_mean=20
+    strand_sd=75
 
     _defaultVL = "https://marcolorenzi.github.io/material/winter_school/volumes.csv"
     _defaultCL = "https://marcolorenzi.github.io/material/winter_school/cognition.csv"
@@ -85,15 +85,15 @@ class SNP_bnn(pt.nn.Module):
         self.list_W_logvar=list_W_logvar
         
         # Creating noise parameter for decoding layer estimate
-        self.noise = pt.nn.Parameter(pt.Tensor([[noise0] * output_shape[1]]), requires_grad=True) # dimension of the output
+        self.noise = pt.nn.Parameter(pt.Tensor([[noise0] * output_shape[1]]).to(DEVICE), requires_grad=True) # dimension of the output
         
         # Creating the parameters in the decoding part (dropout with log(alpha), mu' and the bias associated with the physiological traits)
-        self.alpha=pt.nn.Parameter(pt.Tensor([[alpha0]] * len(listdim)), requires_grad=True) #alpha is a log
-        self.mu=pt.nn.Parameter(pt.Tensor([[mu0] * outputdim] * len(listdim)), requires_grad=True)
+        self.alpha=pt.nn.Parameter(pt.Tensor([[alpha0]] * len(listdim)).to(DEVICE), requires_grad=True) #alpha is a log
+        self.mu=pt.nn.Parameter(pt.Tensor([[mu0] * outputdim] * len(listdim)).to(DEVICE), requires_grad=True)
         
         if self.Y is not None:
-            bias=pt.nn.Parameter(self.Y.mean(0).clone().detach(), requires_grad=True)
-        else: bias=pt.nn.Parameter(pt.tensor([[bias0] * outputdim], dtype=float), requires_grad=True)
+            bias=pt.nn.Parameter(self.Y.mean(0).clone().detach(), requires_grad= True)
+        else: bias=pt.nn.Parameter(pt.tensor([[bias0] * outputdim], dtype=float).to(DEVICE), requires_grad=True)
         self.bias=bias
         
         self.optimizer = pt.optim.Adam(self.parameters(), lr=0.001)
@@ -310,50 +310,20 @@ class SNP_bnn(pt.nn.Module):
                         print(string)
         
     @classmethod
-    def genfullprofile(cls, samplesize, nb_gene, nb_trait, nb_W2dim, noise = float(0.05)):
-        X=[]
-        for i in range(0,nb_gene):
-            nb_SNP=np.random.randint(cls.strand_min,cls.strand_max)
-            SNP=np.floor(abs(np.random.randn(samplesize, nb_SNP)))
-            for sample in range(0,SNP.shape[0]):
-                for snp in range(0,SNP.shape[1]):
-                    if SNP[sample][snp]>2: 
-                        SNP[sample][snp]=2
-            SNP = pt.tensor(SNP, device=DEVICE, dtype=float)
-            X.append(SNP)
-        W=[]
-        Z=[]
-        for i in range(nb_W2dim):
-            Wi=abs(np.random.randn(X[i].shape[1],nb_trait))
-            for i2 in range(4, nb_trait):
-                Wi[:,i2]=0
-            Wi=pt.tensor(Wi, device=DEVICE, dtype=float)
-            W.append(Wi)
-            Z.append(X[i] @ Wi)
-        for i in range(nb_W2dim, nb_gene):
-            Wi=[[0] * nb_trait] * X[i].shape[1]
-            Wi=pt.tensor(Wi, device=DEVICE, dtype=float)
-            W.append(Wi)
-            Z.append(X[i] @ Wi)
-        Y=sum(Z)
-        Y=Y + pt.tensor([[cls._bias] * Y.shape[1]] * Y.shape[0], device=DEVICE)
-        noise=pt.normal(mean=pt.tensor([[0] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE), 
-                    std=pt.tensor([[noise * cls._bias] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE))
-        Y=Y + noise
-        pt.cuda.empty_cache()
-        return ({"X":X, "W":W, "Z":Z, "Y":Y})
-    
-    # redined genfullprofile function to save synthetic dataset.
-    @classmethod
-    def gfptoCSV(cls, samplesize, nb_gene, nb_trait, nb_W2dim, filename, noise=float(0.05) ):
-        complete_filename=filename+"%is_%ig_%it_%itg_%.2fn"%(samplesize, nb_gene, nb_trait, nb_W2dim, noise)
+    def gfptoCSV(cls, samplesize, nb_gene, nb_trait, nb_W2dim, filename = "", noise=float(0.05), save_data = False):
+        nbSNPperGene = pd.read_csv('/home/mdeprez/Documents/Data_ADNI/pathways-bnn/nbSNPperGene.csv', names=("Gene", "Nb_snps"))
         
         X=[]
         X_csv=[]
         X_Gsnp=[]
+        nb_SNP = np.random.choice(nbSNPperGene.loc[:,"Nb_snps"].to_numpy(), size = nb_gene, replace=False)
         for i in range(0,nb_gene):
-            nb_SNP=np.random.randint(cls.strand_min,cls.strand_max)
-            SNP=np.floor(abs(np.random.randn(samplesize, nb_SNP)))
+            # nb_SNP = np.random.choice(nbSNPperGene.loc[:,"Nb_snps"].to_numpy(), size = nb_gene, replace=False)
+            # nb_SNP=np.round(abs(np.random.normal(cls.strand_mean,cls.strand_sd)))
+            # while nb_SNP < 3:
+            #     nb_SNP = np.round(abs(np.random.normal(cls.strand_mean,cls.strand_sd)))
+            
+            SNP=np.floor(abs(np.random.randn(samplesize, nb_SNP[i])))
             for sample in range(0,SNP.shape[0]):
                 for snp in range(0,SNP.shape[1]):
                     if SNP[sample][snp]>2: 
@@ -370,8 +340,9 @@ class SNP_bnn(pt.nn.Module):
         Z=[]
         for i in range(nb_W2dim):
             Wi=abs(np.random.randn(X[i].shape[1],nb_trait) * 5)
-            nb_snp_use = np.random.random_integers(3,X[i].shape[1], 1)
-            Wi[-(X[i].shape[1]-nb_snp_use[0]):,:]=0
+            if X[i].shape[1] > 5 :
+                nb_snp_use = np.random.randint(5, X[i].shape[1], 1)
+                Wi[-(X[i].shape[1]-nb_snp_use[0]):,:]=0
             W_csv.append(Wi)
             Wi=pt.tensor(Wi, device=DEVICE, dtype=float)
             W.append(Wi)
@@ -382,19 +353,24 @@ class SNP_bnn(pt.nn.Module):
             Wi=pt.tensor(Wi, device=DEVICE, dtype=float)
             W.append(Wi)
             Z.append(X[i] @ Wi)
+        
         Y=sum(Z)
-       # Y=Y + pt.tensor([[cls._bias] * Y.shape[1]] * Y.shape[0], device=DEVICE)
-        noise=pt.normal(mean=pt.tensor([[0] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE), 
-                    std=pt.tensor([[noise * cls._bias] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE))
-        Y=Y + noise
+        noise_std = np.std(Y.numpy()) * noise
+        Y=Y + pt.tensor([[cls._bias] * Y.shape[1]] * Y.shape[0], device=DEVICE)
+        noise_t=pt.normal(mean=pt.tensor([[0] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE), 
+                    std=pt.tensor([[noise_std * cls._bias] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE))
+        Y_noise=Y + noise_t
         pt.cuda.empty_cache()
         
-        if not os.path.exists(complete_filename):
-            os.mkdir(complete_filename)
-            np.savetxt(complete_filename+"/gen_matrix.csv", np.vstack(X_csv), delimiter=";")
-            np.savetxt(complete_filename+"/gen_snp.csv", np.vstack(X_Gsnp), delimiter=";")
-            np.savetxt(complete_filename+"/w_snp_target.csv", np.vstack(W_csv), delimiter=";")
-            np.savetxt(complete_filename+"/target.csv", Y.numpy().transpose(), delimiter=";")
+        if save_data: 
+            complete_filename=filename+"%is_%ig_%it_%itg_%.2fn"%(samplesize, nb_gene, nb_trait, nb_W2dim, noise)
+            if not os.path.exists(complete_filename):
+                os.mkdir(complete_filename)
+                np.savetxt(complete_filename+"/gen_matrix.csv", np.vstack(X_csv), delimiter=";")
+                np.savetxt(complete_filename+"/gen_snp.csv", np.vstack(X_Gsnp), delimiter=";")
+                np.savetxt(complete_filename+"/w_snp_target.csv", np.vstack(W_csv), delimiter=";")
+                np.savetxt(complete_filename+"/target.csv", Y.numpy().transpose(), delimiter=";")
+                np.savetxt(complete_filename+"/target_noise.csv", Y_noise.numpy().transpose(), delimiter=";")
         return ({"X":X, "W":W, "Z":Z, "Y":Y, "X_csv":X_csv, "X_Gsnp":X_Gsnp, "W_csv":W_csv})
     
     
