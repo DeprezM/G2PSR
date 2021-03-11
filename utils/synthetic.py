@@ -11,14 +11,16 @@ from matplotlib import pyplot as plt
 import pandas as pd
 from gpu import DEVICE # Check if GPU core available
 import os
+import copy
 
 
 samplesize = 400
 nb_gene = 200
 nb_trait = 15
-nb_W2dim = 10
-noise = [0.01, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.4, 1.7, 2.0, 2.5, 3.0, 4.0]
-filename = "/home/mdeprez/Documents/Data_ADNI/Simulation_results/Benchmark_datasets/noise_same_3/"
+pct_trait = [10, 50, 100]
+nb_W2dim = 5
+noise = [0.01, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 2.0, 3.0, 4.0]
+filename = "/home/mdeprez/Documents/Data_ADNI/Simulation_results/Benchmark_datasets/noise_target4/"
  # def gfptoCSV(cls, samplesize, nb_gene, nb_trait, nb_W2dim, filename = "", noise=float(0.05), save_data = False):
 nbSNPperGene = pd.read_csv('/home/mdeprez/Documents/Data_ADNI/pathways-bnn/nbSNPperGene.csv', names=("Gene", "Nb_snps"))
 
@@ -48,7 +50,7 @@ W=[]
 W_csv=[]
 Z=[]
 for i in range(nb_W2dim):
-    Wi=abs(np.random.randn(X[i].shape[1],nb_trait) * 5)
+    Wi=abs(np.random.randn(X[i].shape[1],nb_trait) )#* 5)
     if X[i].shape[1] > 5 :
         nb_snp_use = np.random.randint(5, X[i].shape[1], 1)
         Wi[-(X[i].shape[1]-nb_snp_use[0]):,:]=0
@@ -64,20 +66,52 @@ for i in range(nb_W2dim, nb_gene):
     Z.append(X[i] @ Wi)
 
 Y=sum(Z)
-Y=Y + pt.tensor([[1] * Y.shape[1]] * Y.shape[0], device=DEVICE)
+Y = Y + pt.tensor([[1] * Y.shape[1]] * Y.shape[0], device=DEVICE)
 
-for i in range(0, len(noise)):
-    noise_std = np.std(Y.numpy()) * noise[i]
-    noise_t=pt.normal(mean=pt.tensor([[0] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE), 
-                std=pt.tensor([[noise_std * 1] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE))
-    Y_noise = Y + noise_t
+ZZ = []
+ww_csv = []
+for j in range(0, len(pct_trait)):
+    for g in range(0, nb_gene):
+        trait_ind = int(np.floor(nb_trait*(pct_trait[j]/100)))
+        ww = copy.deepcopy(W[g])
+        ww[:, trait_ind:] = 0
+        ww_csv.append(ww)
+        ZZ.append(X[g] @ ww) 
+    
+    YY = sum(ZZ)
+    # adapt the amplitude between noise and unknown ...
+    mean_shift = np.mean(YY[:, :trait_ind].numpy()) - np.mean(YY[:, trait_ind:].numpy())
+    YY[:, trait_ind:] = YY[:, trait_ind:] + np.random.normal(mean_shift, 1, YY[:, trait_ind:].shape)
+    YY = YY + pt.tensor([[1] * YY.shape[1]] * YY.shape[0], device=DEVICE)
+
+    for i in range(0, len(noise)):
+        # noise_std = np.std(YY[:,0].numpy()) * noise[i]
+        noise_std = YY.numpy().std(0) * noise[i]
+        noise_t=pt.normal(mean=pt.tensor([[0] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE), 
+                    std=pt.tensor([noise_std * 1] * samplesize, dtype=pt.float, device=DEVICE))
         
-    complete_filename=filename+"%is_%ig_%it_%itg_%.2fn"%(samplesize, nb_gene, nb_trait, nb_W2dim, noise[i])
-    if not os.path.exists(complete_filename):
-        os.mkdir(complete_filename)
-        np.savetxt(complete_filename+"/gen_matrix.csv", np.vstack(X_csv), delimiter=";")
-        np.savetxt(complete_filename+"/gen_snp.csv", np.vstack(X_Gsnp), delimiter=";")
-        np.savetxt(complete_filename+"/w_snp_target.csv", np.vstack(W_csv), delimiter=";")
-        np.savetxt(complete_filename+"/target.csv", Y.numpy().transpose(), delimiter=";")
-        np.savetxt(complete_filename+"/target_noise.csv", Y_noise.numpy().transpose(), delimiter=";")
+        noise_t = noise_t.numpy()
+        for m in range(0, noise_t.shape[1]):
+            rand_int = np.random.randint(0,100, 1)[0]
+            if rand_int < 45 :
+                noise_t[:, m] = np.abs(noise_t[:, m])
+            elif rand_int < 90 :
+                noise_t[:, m] = -np.abs(noise_t[:, m])
+                 
+        Y_noise = YY + noise_t
+        Y_noise = np.absolute(Y_noise)
+        
+        Y_noise = Y_noise.numpy()
+        for k in range(1, Y.shape[1], 2):
+            Y_noise[:,k] = np.floor(Y_noise[:,k])
+        
+        
+        complete_filename=filename+"%is_%ig_%it_%itg_%itt_%.2fn"%(samplesize, nb_gene, nb_trait, nb_W2dim, pct_trait[j], noise[i])
+        if not os.path.exists(complete_filename):
+            os.mkdir(complete_filename)
+            np.savetxt(complete_filename+"/gen_matrix.csv", np.vstack(X_csv), delimiter=";")
+            np.savetxt(complete_filename+"/gen_snp.csv", np.vstack(X_Gsnp), delimiter=";")
+            np.savetxt(complete_filename+"/w_snp_target.csv", np.vstack(W_csv), delimiter=";")
+            np.savetxt(complete_filename+"/target.csv", YY.numpy().transpose(), delimiter=";")
+            np.savetxt(complete_filename+"/target_noise.csv", Y_noise.transpose(), delimiter=";")
 
