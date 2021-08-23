@@ -50,7 +50,11 @@ class SNP_bnn(pt.nn.Module):
                 if type(input_list[i]) is pt.Tensor:
                     if (self.X is None): self.X=[]
                     input_shape=input_list[i].shape
-                    listdim.append(input_shape[1])
+                    if len(input_shape) == 1 :
+                        listdim.append(1)
+                    else:
+                        listdim.append(input_shape[1])
+                    # listdim.append(input_shape[1])
                     self.X.append(input_list[i])
                 else: return("error")
         else: return("error")
@@ -123,7 +127,7 @@ class SNP_bnn(pt.nn.Module):
     def forward(self,X):
         # Encoding SNPs into the gene layer
         genarray= []
-        # Set up the normal distribution parameters for the encoding layer
+        # Set up the normal distribution parameters for the encoding layer with variational dropout parameter alpha.
         for i in range(len(X)):
             gen=pt.distributions.Normal(
                 loc = self.list_W_mu[i](X[i].float()),
@@ -188,6 +192,9 @@ class SNP_bnn(pt.nn.Module):
         losslist=[]
         plist=[]
         mulist=[]
+        musnplist=[]
+        nb_snp=sum([el.shape[1] for el in self.X])
+        
         for epoch in range(0, epochmax):
             pt.cuda.empty_cache()
 
@@ -208,7 +215,15 @@ class SNP_bnn(pt.nn.Module):
                 plist.append(p)
                 mu=abs(self.mu.mean(1).detach().cpu().numpy()) #add the mean of the weights
                 mulist.append(mu)
-
+                
+                tmp_mu_snp = [i.weight.detach().cpu().numpy().tolist()[0] for i in self.list_W_mu]
+                musnp = [None]*nb_snp
+                nb=0
+                for idx, val in enumerate(tmp_mu_snp):
+                    musnp[nb:nb+len(val)]= val
+                    nb+=len(val)
+                musnplist.append(musnp)
+                
             self.optimizer.step()
 
             
@@ -219,6 +234,15 @@ class SNP_bnn(pt.nn.Module):
         plist.append(p)
         mu=abs(self.mu.mean(1).detach().cpu().numpy())
         mulist.append(mu)
+        tmp_mu_snp = [i.weight.detach().cpu().numpy().tolist()[0] for i in self.list_W_mu]
+        musnp = [None]*nb_snp
+        nb=0
+        for idx, val in enumerate(tmp_mu_snp):
+            musnp[nb:nb+len(val)]= val
+            nb+=len(val)
+        musnplist.append(musnp)
+        
+        
         
         # Plot making --  NEEDS TO BE REFINED
         indexlist=list(range(0,epochmax,step))
@@ -268,7 +292,7 @@ class SNP_bnn(pt.nn.Module):
         
         pt.cuda.empty_cache()
         self.summary()
-        return ({"Losslist":losslist, "plist":plist, "mulist":mulist})
+        return ({"Losslist":losslist, "plist":plist, "mulist":mulist, "musnplist":musnplist})
     
     
     ## NEED TO REFINE THE SUMMARY FUNCTION AND PRINTABLE...
@@ -310,19 +334,15 @@ class SNP_bnn(pt.nn.Module):
                         print(string)
         
     @classmethod
-    def gfptoCSV(cls, samplesize, nb_gene, nb_trait, nb_W2dim, filename = "", noise=float(0.05), save_data = False):
+    def gfptoCSV(cls, samplesize, nb_gene, nb_trait, nb_W2dim, pct_trait, filename = "", noise=float(0.05), save_data = False):
         nbSNPperGene = pd.read_csv('/home/mdeprez/Documents/Data_ADNI/pathways-bnn/nbSNPperGene.csv', names=("Gene", "Nb_snps"))
         
         X=[]
         X_csv=[]
         X_Gsnp=[]
+        # number of SNPs per gene
         nb_SNP = np.random.choice(nbSNPperGene.loc[:,"Nb_snps"].to_numpy(), size = nb_gene, replace=False)
         for i in range(0,nb_gene):
-            # nb_SNP = np.random.choice(nbSNPperGene.loc[:,"Nb_snps"].to_numpy(), size = nb_gene, replace=False)
-            # nb_SNP=np.round(abs(np.random.normal(cls.strand_mean,cls.strand_sd)))
-            # while nb_SNP < 3:
-            #     nb_SNP = np.round(abs(np.random.normal(cls.strand_mean,cls.strand_sd)))
-            
             SNP=np.floor(abs(np.random.randn(samplesize, nb_SNP[i])))
             for sample in range(0,SNP.shape[0]):
                 for snp in range(0,SNP.shape[1]):
@@ -339,10 +359,13 @@ class SNP_bnn(pt.nn.Module):
         W_csv=[]
         Z=[]
         for i in range(nb_W2dim):
+            # Adapt the number of target dimension.
             Wi=abs(np.random.randn(X[i].shape[1],nb_trait) * 5)
             if X[i].shape[1] > 5 :
                 nb_snp_use = np.random.randint(5, X[i].shape[1], 1)
-                Wi[-(X[i].shape[1]-nb_snp_use[0]):,:]=0
+                Wi[-(X[i].shape[1]-nb_snp_use[0]):,:]=0                        
+            trait_ind = int(np.floor(nb_trait*(pct_trait/100)))
+            Wi[:, trait_ind:] = Wi[:, trait_ind:] / 5
             W_csv.append(Wi)
             Wi=pt.tensor(Wi, device=DEVICE, dtype=float)
             W.append(Wi)
@@ -355,7 +378,7 @@ class SNP_bnn(pt.nn.Module):
             Z.append(X[i] @ Wi)
         
         Y=sum(Z)
-        noise_std = np.std(Y.numpy()) * noise
+        noise_std = np.std(Y[:,0].numpy()) * noise
         Y=Y + pt.tensor([[cls._bias] * Y.shape[1]] * Y.shape[0], device=DEVICE)
         noise_t=pt.normal(mean=pt.tensor([[0] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE), 
                     std=pt.tensor([[noise_std * cls._bias] * nb_trait] * samplesize, dtype=pt.float, device=DEVICE))
@@ -363,7 +386,7 @@ class SNP_bnn(pt.nn.Module):
         pt.cuda.empty_cache()
         
         if save_data: 
-            complete_filename=filename+"%is_%ig_%it_%itg_%.2fn"%(samplesize, nb_gene, nb_trait, nb_W2dim, noise)
+            complete_filename=filename+"%is_%ig_%it_%ipt_%itg_%.2fn"%(samplesize, nb_gene, nb_trait, pct_trait, nb_W2dim, noise)
             if not os.path.exists(complete_filename):
                 os.mkdir(complete_filename)
                 np.savetxt(complete_filename+"/gen_matrix.csv", np.vstack(X_csv), delimiter=";")
