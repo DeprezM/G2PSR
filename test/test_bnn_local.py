@@ -9,7 +9,8 @@ Created on Fri Jun 18 10:48:32 2021
 import sys
 sys.path.append("..")
 
-from bayesNN import SNP_bnn
+# from bayesNN import SNP_bnn
+from bnn_GPSR import SNP_bnn
 import time
 import copy
 from sklearn.metrics import precision_recall_curve
@@ -27,7 +28,7 @@ import numpy as np
 # - directory 
 
 # complete_filename = "/data/epione/user/mdeprez/benchmark_dataset/target_genes/" + str(sys.argv[1]) + "/"
-complete_filename = "/user/mdeprez/home/Documents/Data_ADNI/Simulation_results/Benchmark_datasets/200s_30g_15t_3tg_100tt_0.20n_0rep/"
+complete_filename = "/user/mdeprez/home/Documents/BNN/benchmark_results/local_synthetic_dataset/200s_30g_15t_3tg_100tt_0.20n_0rep/"
 var_str = "200s_30g_15t_3tg_100tt_0.20n_0rep"
 
 
@@ -52,7 +53,8 @@ for i in range(0,X_group.shape[1]):
 start_time = time.time()
 #data=SNP_bnn.gfptoCSV(args.nbsubject, args.genes, args.target, args.relevant, noise=args.noise)
 bnn=SNP_bnn(X_tensor, Y_tensor)
-result = bnn.optimize(X_tensor, Y_tensor, epochmax=25000, step=1000, verbose=True)
+# bnn.optimize(X_tensor, Y_tensor, epochmax=25000, step=1000, verbose=True)
+result = bnn.optimize(X_tensor, Y_tensor, epochmax=50000, step=1000, verbose=True)
 end_time = time.time()
 
 # Check loss function

@@ -14,11 +14,11 @@ import os
 import copy
 
 ##### Parameter values -------------------------------------------------------
-samplesize_list = [500] # Number of samples
-nb_gene_list = [200] # Number of genes (total)
-nb_trait_list = [1, 2, 5, 10, 15, 20, 30] # Number of phenotypic traits
-nb_true_trait = [20, 50, 100] # Percentage of relevant phenotypic traits
-nb_true_gene_list = [5] # Number of relevant genes
+samplesize_list = [1000] # Number of samples
+nb_gene_list = [10000, 20000] # Number of genes (total)
+nb_trait_list = [15] # Number of phenotypic traits
+nb_true_trait = [4, 15] # Percentage of relevant phenotypic traits
+nb_true_gene_list = [2, 5, 10] # Number of relevant genes
 noise = [0.2] # Noise level (percentage of phenotypic sd)
 nb_replicate = 10 # Number of different dataset
 
@@ -27,7 +27,7 @@ nbSNPperGene = pd.read_csv('/data/epione/user/mdeprez/benchmark_dataset/nbSNPper
 
 
 ##### Output directory
-filename = "/data/epione/user/mdeprez/benchmark_dataset/pheno_target/"
+filename = "/data/epione/user/mdeprez/benchmark_dataset/total_genes_whole/"
 # filename = "/user/mdeprez/home/Documents/Data_ADNI/Simulation_results/Benchmark_datasets/"
 
 
@@ -98,26 +98,26 @@ for r in range(0, nb_replicate):
                         ww_csv = []
                         ZZ = []
                         for g in range(0, nb_gene):
-                            trait_ind = int(np.floor(nb_trait*(nb_true_trait[j]/100)))
+                            # trait_ind = int(np.floor(nb_trait*(nb_true_trait[j]/100)))
                             ww = copy.deepcopy(W[g])
-                            ww[:, trait_ind:] = 0
-                            # ww[:, (nb_true_trait[j]-1):] = 0
+                            # ww[:, trait_ind:] = 0
+                            ww[:, (nb_true_trait[j]-1):] = 0
                             ww_csv.append(ww)
                             ZZ.append(X[g][:samplesize,:] @ ww)
                             XX_csv[g] = X_csv[g][:,:samplesize]
                         
                         YY = sum(ZZ)
                         # adapt the amplitude between noise and unknown ...
-                        mean_shift = np.mean(YY[:, :trait_ind].numpy())
-                        std_shift = abs(np.random.normal(np.std(YY[:,0].numpy()), 1, YY[:, trait_ind:].shape[1]))
-                        YY[:, trait_ind:] = YY[:, trait_ind:] + np.random.normal(loc = [[mean_shift]*len(std_shift)] * samplesize, 
-                                                                                  scale = [std_shift] * samplesize)
-                        YY = YY + pt.tensor([[1] * YY.shape[1]] * YY.shape[0], device=DEVICE)
-                        # mean_shift = np.mean(YY[:, :(nb_true_trait[j]-1)].numpy())
-                        # std_shift = abs(np.random.normal(np.std(YY[:,0].numpy()), 1, YY[:, (nb_true_trait[j]-1):].shape[1]))
-                        # YY[:, (nb_true_trait[j]-1):] = YY[:, (nb_true_trait[j]-1):] + np.random.normal(loc = [[mean_shift]*len(std_shift)] * samplesize, 
+                        # mean_shift = np.mean(YY[:, :trait_ind].numpy())
+                        # std_shift = abs(np.random.normal(np.std(YY[:,0].numpy()), 1, YY[:, trait_ind:].shape[1]))
+                        # YY[:, trait_ind:] = YY[:, trait_ind:] + np.random.normal(loc = [[mean_shift]*len(std_shift)] * samplesize, 
                         #                                                           scale = [std_shift] * samplesize)
                         # YY = YY + pt.tensor([[1] * YY.shape[1]] * YY.shape[0], device=DEVICE)
+                        mean_shift = np.mean(YY[:, :(nb_true_trait[j]-1)].numpy())
+                        std_shift = abs(np.random.normal(np.std(YY[:,0].numpy()), 1, YY[:, (nb_true_trait[j]-1):].shape[1]))
+                        YY[:, (nb_true_trait[j]-1):] = YY[:, (nb_true_trait[j]-1):] + np.random.normal(loc = [[mean_shift]*len(std_shift)] * samplesize, 
+                                                                                  scale = [std_shift] * samplesize)
+                        YY = YY + pt.tensor([[1] * YY.shape[1]] * YY.shape[0], device=DEVICE)
                     
 ##### Noise ------------------------------------------------------------------
                         for i in range(0, len(noise)):

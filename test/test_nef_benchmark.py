@@ -9,7 +9,7 @@ Created on Fri Feb  5 14:49:15 2021
 import sys
 sys.path.append("..")
 
-from bayesNN import SNP_bnn
+from bnn_GPSR import SNP_bnn
 import time
 import copy
 from sklearn.metrics import precision_recall_curve
@@ -25,7 +25,7 @@ import numpy as np
 ## Arguments order
 # - directory 
 
-complete_filename = "/data/epione/user/mdeprez/benchmark_dataset/total_genes_whole/" + str(sys.argv[1]) + "/"
+complete_filename = "/data/epione/user/mdeprez/benchmark_dataset/samples/" + str(sys.argv[1]) + "/"
 
 ##### Load files -------------------------------------------------------------
 X_csv=pd.read_csv(complete_filename+'gen_matrix.csv', sep=';',header=None)
@@ -105,6 +105,25 @@ for i in range(0, result["mulist"].shape[0]):
                          float(info[5][:-1]), float(info[4][:-2]), float(info[6][:-3]), var_str]
     print("\t".join(map(str, list_of_features)))
 
+# Check Y noise
+for i in range(0, len(result["ynoise"][0])):
+    list_of_features = ["ynoise_param"]
+    for j in range(0, len(result["ynoise"])):
+        list_of_features.append(result["ynoise"][j][i])
+    list_of_features += ["P_"+str(i+1) ,float(info[0][:-1]), float(info[1][:-1]), X_group.shape[0], float(info[2][:-1]), float(info[3][:-2]),
+                         float(info[5][:-1]), float(info[4][:-2]), float(info[6][:-3]), var_str]
+    print("\t".join(map(str, list_of_features)))
+    
+# Check Y noise
+for i in range(0, len(result["ybias"][0])):
+    list_of_features = ["ybias_param"]
+    for j in range(0, len(result["ybias"])):
+        list_of_features.append(result["ybias"][j][i])
+    list_of_features += ["P_"+str(i+1) ,float(info[0][:-1]), float(info[1][:-1]), X_group.shape[0], float(info[2][:-1]), float(info[3][:-2]),
+                         float(info[5][:-1]), float(info[4][:-2]), float(info[6][:-3]), var_str]
+    print("\t".join(map(str, list_of_features)))
+    
+    
 # Check mulist per snp
 for i in range(0, len(result["musnplist"][0])):
     list_of_features = ["mu_snp_param"]
