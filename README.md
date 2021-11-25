@@ -6,9 +6,9 @@ The Bayesian Genome-to-Phenome Sparse Regression (G2PSR) is a neural network whi
 
 This repository contains the code related to G2PSR paper.
 
-## Installation
+## Installation for GNU/Linux
 
-## GNU/Linux
+
 Install conda:
 ```bash
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh  
