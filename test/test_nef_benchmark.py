@@ -89,9 +89,36 @@ for i in range(0, result["plist"].shape[1]):
     TP = confusion[1][1]
     FP = confusion[0][1]
     accuracy = accuracy_score(y, prediction)*100
+    
+    w_pred_all = copy.deepcopy(result["musnplist"][i])
+    w_real = W_csv.mean(axis=1)
+    snp_binary = [1 if el != 0 else 0 for el in w_real]
+    w_pred = copy.deepcopy(w_pred_all)
+    for idx in range(X_group.shape[1]):
+        idx_snp = np.where(X_group[:,idx] == 1)[0].tolist()
+        if prediction[idx] != 1:
+            w_pred[idx_snp[0]:idx_snp[len(idx_snp)-1]+1] = [0]*len(idx_snp)
+
+    precision_snp, recall_snp, thresholds_snp = precision_recall_curve(snp_binary, w_pred_all)
+    avg_value_snp = average_precision_score(snp_binary, w_pred_all)
+    auc_value_snp = auc(recall_snp, precision_snp)
+    fscore_snp = (2 * precision_snp * recall_snp) / (precision_snp + recall_snp)
+    ix_snp = np.argmax(fscore_snp)
+    
+    prediction_snp = [1 if el >= thresholds_snp[ix_snp] else 0 for el in w_pred_all]
+    
+    confusion = confusion_matrix(snp_binary, prediction_snp) 
+    FN_snp = confusion[1][0]
+    TN_snp = confusion[0][0]
+    TP_snp = confusion[1][1]
+    FP_snp = confusion[0][1]
+    
+    accuracy_snp = accuracy_score(snp_binary, prediction_snp)*100
 
     list_of_features += [auc_value, avg_value, round(fscore[ix],2),
                          TP, TN, FP, FN, accuracy,
+                         auc_value_snp, avg_value_snp, round(fscore_snp[ix_snp],2),
+                         TP_snp, TN_snp, FP_snp, FN_snp, accuracy_snp,
                          float(info[0][:-1]), float(info[1][:-1]), X_group.shape[0], float(info[2][:-1]), float(info[3][:-2]),
                          float(info[5][:-1]), float(info[4][:-2]), float(info[6][:-3]), var_str]
     print("\t".join(map(str, list_of_features)))    

@@ -14,11 +14,11 @@ import os
 import copy
 
 ##### Parameter values -------------------------------------------------------
-samplesize_list = [1000] # Number of samples
-nb_gene_list = [10000, 20000] # Number of genes (total)
+samplesize_list = [500] # Number of samples
+nb_gene_list = [20, 50, 100, 200, 500, 1000, 2000, 5000] # Number of genes (total)
 nb_trait_list = [15] # Number of phenotypic traits
 nb_true_trait = [4, 15] # Percentage of relevant phenotypic traits
-nb_true_gene_list = [2, 5, 10] # Number of relevant genes
+nb_true_gene_list = [5] # Number of relevant genes
 noise = [0.2] # Noise level (percentage of phenotypic sd)
 nb_replicate = 10 # Number of different dataset
 
@@ -27,7 +27,7 @@ nbSNPperGene = pd.read_csv('/data/epione/user/mdeprez/benchmark_dataset/nbSNPper
 
 
 ##### Output directory
-filename = "/data/epione/user/mdeprez/benchmark_dataset/total_genes_whole/"
+filename = "/data/epione/user/mdeprez/benchmark_dataset/total_genes/"
 # filename = "/user/mdeprez/home/Documents/Data_ADNI/Simulation_results/Benchmark_datasets/"
 
 

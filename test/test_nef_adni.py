@@ -10,7 +10,7 @@ Created on Mon Aug 23 17:47:12 2021
 import sys
 sys.path.append("..")
 
-from bayesNN import SNP_bnn
+from bnn_GPSR import SNP_bnn
 import time
 import torch as pt
 import pandas as pd
@@ -29,6 +29,7 @@ X_csv=pd.read_csv(complete_filename+'gen_matrix.csv', sep=';',header=None)
 X_Gsnp =pd.read_csv(complete_filename+'gen_snp.csv', sep=';',header=None)
 Y = pd.read_csv(complete_filename+'target.csv', sep=';',header=None)
 X_names = pd.read_csv(complete_filename+'gen_snp_names.csv', sep=';')
+Y_names = ["Hippocampus.bl","Entorhinal.bl", "CDRSB.bl","ADAS11.bl","MMSE.bl","RAVLT.immediate.bl","RAVLT.forgetting.bl","FAQ.bl"]
 
 ##### Adapt format -----------------------------------------------------------
 X_group = X_Gsnp.to_numpy()
@@ -78,6 +79,22 @@ for i in range(0, len(result["musnplist"][0])):
     for j in range(0, len(result["musnplist"])):
         list_of_features.append(result["musnplist"][j][i])
     list_of_features += [X_names.index[i], X_group.shape[0], X_group.shape[1], Y_tensor.shape[0], Y_tensor.shape[1]]
+    print("\t".join(map(str, list_of_features)))
+    
+    # Check Y noise
+for i in range(0, len(result["ynoise"][0])):
+    list_of_features = ["ynoise_param"]
+    for j in range(0, len(result["ynoise"])):
+        list_of_features.append(result["ynoise"][j][i])
+    list_of_features += [ Y_names[i], X_group.shape[1], Y_tensor.shape[0], Y_tensor.shape[1]]
+    print("\t".join(map(str, list_of_features)))
+    
+# Check Y noise
+for i in range(0, len(result["ybias"][0])):
+    list_of_features = ["ybias_param"]
+    for j in range(0, len(result["ybias"])):
+        list_of_features.append(result["ybias"][j][i])
+    list_of_features += [Y_names[i], X_group.shape[1], Y_tensor.shape[0], Y_tensor.shape[1]]
     print("\t".join(map(str, list_of_features)))
 
 ##### Results ----------------------------------------------------------------
