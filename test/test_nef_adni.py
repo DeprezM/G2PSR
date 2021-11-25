@@ -10,18 +10,15 @@ Created on Mon Aug 23 17:47:12 2021
 import sys
 sys.path.append("..")
 
-from bnn_GPSR import SNP_bnn
+from bayes_G2PSR import G2PSR
 import time
 import torch as pt
 import pandas as pd
 from gpu import DEVICE
 import numpy as np
 
-## Arguments order
-# - directory 
 
-complete_filename = "/home/mdeprez/test_adni/3_pathways/data/" 
-# complete_filename = "/user/mdeprez/home/Documents/Data_ADNI/adni_datasets/3_pathways/" 
+complete_filename = "/repository/adni/data/" 
 
 
 ##### Load files -------------------------------------------------------------
@@ -43,10 +40,10 @@ for i in range(0,X_group.shape[1]):
     X_tensor.append(Xi)
 
 
-##### Run BNN ----------------------------------------------------------------
+##### Run G2PSR ----------------------------------------------------------------
 start_time = time.time()
-bnn=SNP_bnn(X_tensor, Y_tensor)
-result = bnn.optimize(X_tensor, Y_tensor, epochmax=50000, step=1000)
+g2psr=G2PSR(X_tensor, Y_tensor)
+result = g2psr.optimize(X_tensor, Y_tensor, epochmax=50000, step=1000)
 end_time = time.time()
 
 ##### Optimization and final values

@@ -9,7 +9,7 @@ Created on Fri Feb  5 14:49:15 2021
 import sys
 sys.path.append("..")
 
-from bnn_GPSR import SNP_bnn
+from bayes_G2PSR import G2PSR
 import time
 import copy
 from sklearn.metrics import precision_recall_curve
@@ -22,10 +22,8 @@ import pandas as pd
 from gpu import DEVICE
 import numpy as np
 
-## Arguments order
-# - directory 
-
-complete_filename = "/data/epione/user/mdeprez/benchmark_dataset/samples/" + str(sys.argv[1]) + "/"
+# Argument given to this python script through the command line : standardised name of synthetic data
+complete_filename = "/repository/to/synthetic/data/" + str(sys.argv[1]) + "/"
 
 ##### Load files -------------------------------------------------------------
 X_csv=pd.read_csv(complete_filename+'gen_matrix.csv', sep=';',header=None)
@@ -49,13 +47,13 @@ for i in range(0,X_group.shape[1]):
     X_tensor.append(Xi)
 
 
-##### Run BNN ----------------------------------------------------------------
+##### Run G2PSR ----------------------------------------------------------------
 start_time = time.time()
-bnn=SNP_bnn(X_tensor, Y_tensor)
-result = bnn.optimize(X_tensor, Y_tensor, epochmax=50000, step=1000)
+g2psr=G2PSR(X_tensor, Y_tensor)
+result = g2psr.optimize(X_tensor, Y_tensor, epochmax=50000, step=1000)
 end_time = time.time()
 
-##### Optimization
+##### Optimization parameters stored in cluster's job printed output 
 # Check loss function
 for i in range(0, len(result["Losslist"])):
     list_of_features = ["Loss", result["Losslist"][i].item(), 
@@ -141,7 +139,7 @@ for i in range(0, len(result["ynoise"][0])):
                          float(info[5][:-1]), float(info[4][:-2]), float(info[6][:-3]), var_str]
     print("\t".join(map(str, list_of_features)))
     
-# Check Y noise
+# Check Y bias
 for i in range(0, len(result["ybias"][0])):
     list_of_features = ["ybias_param"]
     for j in range(0, len(result["ybias"])):
@@ -165,7 +163,7 @@ for i in range(0, len(result["musnplist"][0])):
 compil_time = end_time - start_time
 
 # Results
-testy = copy.deepcopy(bnn.probalpha().tolist())
+testy = copy.deepcopy(g2psr.probalpha().tolist())
 testy = [1-i[0] for i in testy]
 
 # Performance metrics
@@ -187,7 +185,7 @@ accuracy = accuracy_score(y, prediction)*100
 
 # SNP level
 # Print results per SNPs and their genes
-w_tmp = [np.array(i.weight.tolist())[0,:].tolist() for i in bnn.list_W_mu]
+w_tmp = [np.array(i.weight.tolist())[0,:].tolist() for i in g2psr.list_W_mu]
 w_real = W_csv.mean(axis=1)
 snp_binary = [1 if el != 0 else 0 for el in w_real]
 w_pred = []
