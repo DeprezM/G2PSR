@@ -2,7 +2,7 @@
 
 The Bayesian Genome-to-Phenome Sparse Regression (G2PSR) is a neural network which architecture associates genetic data to multiple phenotypic features through biologically inspired constraint (gene structure).
 
-<img src="./fig/Fig_architecture.png">
+<img src="./fig/Fig_g2psr.png">
 
 This repository contains the code related to G2PSR paper.
 
